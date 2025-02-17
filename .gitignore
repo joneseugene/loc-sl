@@ -1,0 +1,10 @@
+# Ignore environment variable files
+.env
+.env.local
+
+# Ignore log files
+*.log
+
+# Ignore configuration files with sensitive data
+alembic.ini
+migrations/env.py
