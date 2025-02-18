@@ -15,6 +15,8 @@ pip install pydantic
 # Install JWT Authentication
 pip install python-jose[cryptography] passlib bcrypt python-multipart
 pip install pydantic[email]
+pip install pyjwt
+
 
 # Install Dependency Injection
 pip install fastapi-depends
@@ -24,6 +26,14 @@ pip install python-dotenv
 
 # Install for Migrations
 pip install alembic
+
+# Request Limiter
+pip install setuptools
+pip install fastapi-limiter aioredis
+
+
+
+
 
 
 # MIGRATIONS

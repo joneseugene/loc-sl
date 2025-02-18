@@ -5,13 +5,14 @@ from sqlalchemy.orm import Session
 from utils.database import get_db
 from domain.models.user_model import User  
 from domain.schema.user_schema import UserCreate, UserLogin, UserRead
+from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
 
-router = APIRouter(tags=["Users"])
+router = APIRouter(tags=["SuperAdmin Users"], dependencies=[Depends(has_role(1))] )
 
 # FETCH ALL
-@router.get("/users", response_model=List[UserRead])
+@router.get("/super/users", response_model=List[UserRead])
 async def get_users(db: Session = Depends(get_db)):
     try:
         users = db.query(User).filter(User.active == True, User.deleted == False).all()

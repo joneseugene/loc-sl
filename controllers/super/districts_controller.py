@@ -5,13 +5,14 @@ from sqlalchemy.orm import Session
 from utils.database import get_db
 from domain.models.district_model import District  
 from domain.schema.district_schema import DistrictCreate, DistrictRead, DistrictSoftDelete, DistrictUpdate
+from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
 
-router = APIRouter(tags=["Districts"])
+router =  APIRouter(tags=["SuperAdmin Districts"], dependencies=[Depends(has_role(1))] )
 
 # FETCH ALL
-@router.get("/districts", response_model=List[DistrictRead])
+@router.get("/super/districts", response_model=List[DistrictRead])
 async def get_districts(db: Session = Depends(get_db)):
     try:
         districts = db.query(District).filter(District.active == True, District.deleted == False).all()
@@ -25,7 +26,7 @@ async def get_districts(db: Session = Depends(get_db)):
 
 
 # FIND BY ID
-@router.get("/districts/{id}", response_model=DistrictRead)
+@router.get("/super/districts/{id}", response_model=DistrictRead)
 async def get_district_by_id(id: int, db: Session = Depends(get_db)):
     try:
         district = db.query(District).filter(District.id == id, District.active == True, District.deleted == False).first()
@@ -38,7 +39,7 @@ async def get_district_by_id(id: int, db: Session = Depends(get_db)):
     
 
 # FIND BY REGION ID
-@router.get("/districts/{region_id}", response_model=DistrictRead)
+@router.get("/super/districts/{region_id}", response_model=DistrictRead)
 async def get_district_by_id(region_id: int, db: Session = Depends(get_db)):
     try:
         district = db.query(District).filter(District.region_id == region_id, District.active == True, District.deleted == False).first()
@@ -51,7 +52,7 @@ async def get_district_by_id(region_id: int, db: Session = Depends(get_db)):
 
 
 # FIND BY NAME
-@router.get("/districts/name/{name}", response_model=DistrictRead)
+@router.get("/super/districts/name/{name}", response_model=DistrictRead)
 async def get_district_by_name(name: str, db: Session = Depends(get_db)):
     try:
         district = db.query(District).filter(District.name == name, District.active == True, District.deleted == False).first()
@@ -64,7 +65,7 @@ async def get_district_by_name(name: str, db: Session = Depends(get_db)):
 
 
 # CREATE
-@router.post("/districts", response_model=DistrictCreate)
+@router.post("/super/districts", response_model=DistrictCreate)
 async def create_district(district: DistrictCreate, db: Session = Depends(get_db)):
     existing_district = db.query(District).filter(District.name == district.name).first()
 
@@ -79,7 +80,7 @@ async def create_district(district: DistrictCreate, db: Session = Depends(get_db
 
 
 # UPDATE district
-@router.put("/districts/{id}", response_model=DistrictRead)
+@router.put("/super/districts/{id}", response_model=DistrictRead)
 async def update_district(id: int, district_data: DistrictUpdate, db: Session = Depends(get_db)):
     try:
         district = db.query(District).filter(District.id == id).first()
@@ -103,7 +104,7 @@ async def update_district(id: int, district_data: DistrictUpdate, db: Session = 
 
 
 # SOFT DELETE district
-@router.delete("/districts/{id}")
+@router.delete("/super/districts/{id}")
 async def soft_delete_district(id: int, delete_data: DistrictSoftDelete, db: Session = Depends(get_db)):
     try:
         district = db.query(District).filter(District.id == id, District.deleted == False).first()

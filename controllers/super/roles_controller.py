@@ -5,13 +5,14 @@ from sqlalchemy.orm import Session
 from utils.database import get_db
 from domain.models.role_model import Role 
 from domain.schema.role_schema import RoleCreate, RoleRead, RoleSoftDelete, RoleUpdate
+from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
 
-router = APIRouter(tags=["Roles"])
+router = APIRouter(tags=["SuperAdmin Roles"], dependencies=[Depends(has_role(1))] )
 
 # FETCH ALL
-@router.get("/roles", response_model=List[RoleRead])
+@router.get("/super/roles", response_model=List[RoleRead])
 async def get_roles(db: Session = Depends(get_db)):
     try:
         roles = db.query(Role).filter(Role.active == True, Role.deleted == False).all()
@@ -25,7 +26,7 @@ async def get_roles(db: Session = Depends(get_db)):
 
 
 # FIND BY ID
-@router.get("/roles/{id}", response_model=RoleRead)
+@router.get("/super/roles/{id}", response_model=RoleRead)
 async def get_role_by_id(id: int, db: Session = Depends(get_db)):
     try:
         role = db.query(Role).filter(Role.id == id, Role.active == True, Role.deleted == False).first()
@@ -38,7 +39,7 @@ async def get_role_by_id(id: int, db: Session = Depends(get_db)):
 
 
 # FIND BY NAME
-@router.get("/roles/name/{name}", response_model=RoleRead)
+@router.get("/super/roles/name/{name}", response_model=RoleRead)
 async def get_role_by_name(name: str, db: Session = Depends(get_db)):
     try:
         role = db.query(Role).filter(Role.name == name, Role.active == True, Role.deleted == False).first()
@@ -51,7 +52,7 @@ async def get_role_by_name(name: str, db: Session = Depends(get_db)):
 
 
 # CREATE
-@router.post("/roles", response_model=RoleCreate)
+@router.post("/super/roles", response_model=RoleCreate)
 async def create_role(role: RoleCreate, db: Session = Depends(get_db)):
     existing_role = db.query(Role).filter(Role.name == role.name).first()
 
@@ -65,7 +66,7 @@ async def create_role(role: RoleCreate, db: Session = Depends(get_db)):
 
 
 # UPDATE
-@router.put("/roles/{id}", response_model=RoleRead)
+@router.put("/super/roles/{id}", response_model=RoleRead)
 async def update_role(id: int, role_data: RoleUpdate, db: Session = Depends(get_db)):
     try:
         role = db.query(Role).filter(Role.id == id).first()
@@ -89,7 +90,7 @@ async def update_role(id: int, role_data: RoleUpdate, db: Session = Depends(get_
 
 
 # SOFT DELETE
-@router.delete("/roles/{id}")
+@router.delete("/super/roles/{id}")
 async def soft_delete_role(id: int, delete_data: RoleSoftDelete, db: Session = Depends(get_db)):
     try:
         role = db.query(Role).filter(Role.id == id, Role.deleted == False).first()

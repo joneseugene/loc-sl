@@ -5,13 +5,14 @@ from sqlalchemy.orm import Session
 from utils.database import get_db
 from domain.models.region_model import Region  
 from domain.schema.region_schema import RegionCreate, RegionRead, RegionSoftDelete, RegionUpdate
+from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
 
-router = APIRouter(tags=["Regions"])
+router = APIRouter(tags=["SuperAdmin Regions"], dependencies=[Depends(has_role(1))] )
 
 # FETCH ALL
-@router.get("/regions", response_model=List[RegionRead])
+@router.get("/super/regions", response_model=List[RegionRead])
 async def get_regions(db: Session = Depends(get_db)):
     try:
         regions = db.query(Region).filter(Region.active == True, Region.deleted == False).all()
@@ -25,7 +26,7 @@ async def get_regions(db: Session = Depends(get_db)):
 
 
 # FIND BY ID
-@router.get("/regions/{id}", response_model=RegionRead)
+@router.get("/super/regions/{id}", response_model=RegionRead)
 async def get_region_by_id(id: int, db: Session = Depends(get_db)):
     try:
         region = db.query(Region).filter(Region.id == id, Region.active == True, Region.deleted == False).first()
@@ -38,7 +39,7 @@ async def get_region_by_id(id: int, db: Session = Depends(get_db)):
 
 
 # FIND BY NAME
-@router.get("/regions/name/{name}", response_model=RegionRead)
+@router.get("/super/regions/name/{name}", response_model=RegionRead)
 async def get_region_by_name(name: str, db: Session = Depends(get_db)):
     try:
         region = db.query(Region).filter(Region.name == name, Region.active == True, Region.deleted == False).first()
@@ -51,7 +52,7 @@ async def get_region_by_name(name: str, db: Session = Depends(get_db)):
 
 
 # CREATE
-@router.post("/regions", response_model=RegionCreate)
+@router.post("/super/regions", response_model=RegionCreate)
 async def create_region(region: RegionCreate, db: Session = Depends(get_db)):
     existing_region = db.query(Region).filter(Region.name == region.name).first()
 
@@ -64,7 +65,7 @@ async def create_region(region: RegionCreate, db: Session = Depends(get_db)):
     return success_response(data=jsonable_encoder(RegionRead.from_orm(new_region)))
 
 # UPDATE REGION
-@router.put("/regions/{id}", response_model=RegionRead)
+@router.put("/super/regions/{id}", response_model=RegionRead)
 async def update_region(id: int, region_data: RegionUpdate, db: Session = Depends(get_db)):
     try:
         region = db.query(Region).filter(Region.id == id).first()
@@ -88,7 +89,7 @@ async def update_region(id: int, region_data: RegionUpdate, db: Session = Depend
 
 
 # SOFT DELETE REGION
-@router.delete("/regions/{id}")
+@router.delete("/super/regions/{id}")
 async def soft_delete_region(id: int, delete_data: RegionSoftDelete, db: Session = Depends(get_db)):
     try:
         region = db.query(Region).filter(Region.id == id, Region.deleted == False).first()

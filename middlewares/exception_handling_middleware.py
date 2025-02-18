@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import IntegrityError
-from .http_response import error_response 
+from utils.http_response import error_response 
 import traceback
 
 def register_exception_handlers(app: FastAPI):

@@ -1,7 +1,8 @@
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from domain.models import User, Role
-from domain.schema import UserCreate
-from utils.security import hash_password
+from domain.models.user_model import User
+from domain.schema.user_schema import UserCreate
+from utils.security import get_user_from_token, hash_password
 
 
 def get_user_by_email(db: Session, email: str):
@@ -21,3 +22,12 @@ def create_user(db: Session, user: UserCreate):
     db.commit()
     db.refresh(new_user)
     return new_user
+
+
+def has_role(role_id: int):
+    def role_checker(user: User = Depends(get_user_from_token)):
+        if user.role_id != role_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return user
+    return role_checker
+
