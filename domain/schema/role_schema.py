@@ -3,15 +3,15 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class RegionBase(BaseModel):
+class RoleBase(BaseModel):
     name: str
-    lon: float
-    lat: float
 
-class RegionCreate(RegionBase):
+
+class RoleCreate(RoleBase):
     pass
 
-class RegionRead(RegionBase):
+
+class RoleRead(RoleBase):
     id: int
     active: bool
     deleted: bool
@@ -20,23 +20,22 @@ class RegionRead(RegionBase):
     updated_at: Optional[datetime] = None
     updated_by: Optional[str] = None
 
-
     class Config:
         orm_mode = True
         json_encoders = {
-            datetime: lambda v: v.isoformat()  
+            datetime: lambda v: v.isoformat()
         }
 
-class RegionUpdate(BaseModel):
+
+class RoleUpdate(BaseModel):
     name: Optional[str] = None
-    lon: Optional[float] = None
-    lat: Optional[float] = None
 
     class Config:
         orm_mode = True
 
-class RegionSoftDelete(BaseModel):
-    deleted_reason: Optional[str] = None 
+
+class RoleSoftDelete(BaseModel):
+    deleted_reason: Optional[str] = None
 
     class Config:
         orm_mode = True

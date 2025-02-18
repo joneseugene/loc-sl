@@ -14,6 +14,7 @@ pip install pydantic
 
 # Install JWT Authentication
 pip install python-jose[cryptography] passlib bcrypt python-multipart
+pip install pydantic[email]
 
 # Install Dependency Injection
 pip install fastapi-depends

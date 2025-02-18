@@ -17,10 +17,9 @@ def success_response(data: Union[BaseModel, List[BaseModel], dict, List[dict], N
     return JSONResponse(
         status_code=200,
         content={
-            "status": "1",
+            "status": "success",
             "status_code": status_code,
             "message": message,
-            "error": "",
             "data": data
         }
     )
@@ -30,10 +29,9 @@ def error_response(status_code: int, error_message: str):
     return JSONResponse(
         status_code=status_code,
         content={
-            "status": "0",
+            "status": "failure",
             "status_code": status_code,
             "error_message": error_message,
-            "message": "error",
             "data": []
         }
     )
