@@ -13,3 +13,5 @@ class Region(Spine):
     lon = Column(Float)
     lat = Column(Float)
     districts = relationship("District", back_populates="region")
+    constituencies = relationship("Constituency", back_populates="region")
+    wards = relationship("Ward", back_populates="region")  

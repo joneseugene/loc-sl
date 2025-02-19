@@ -4,8 +4,8 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from .spine_model import Spine
 
-class Constituency(Spine):
-    __tablename__ = "constituencies"
+class Ward(Spine):
+    __tablename__ = "ward"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
@@ -13,6 +13,7 @@ class Constituency(Spine):
     lat = Column(Float)
     region_id = Column(Integer, ForeignKey("regions.id"))
     district_id = Column(Integer, ForeignKey("districts.id"))
-    region = relationship("Region", back_populates="constituencies")
-    district = relationship("District", back_populates="constituencies")
-    wards = relationship("Ward", back_populates="constituency")
+    constituency_id = Column(Integer, ForeignKey("constituencies.id"))
+    region = relationship("Region", back_populates="wards")
+    district = relationship("District", back_populates="wards")
+    constituency = relationship("Constituency", back_populates="wards")
