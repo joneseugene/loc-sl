@@ -31,6 +31,9 @@ pip install alembic
 pip install setuptools
 pip install fastapi-limiter aioredis
 
+# Slugify
+pip install python-slugify
+
 
 
 

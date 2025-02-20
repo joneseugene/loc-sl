@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class RegionBase(BaseModel):
     name: str
+    slug: Optional[str] = None
     lon: float
     lat: float
 
