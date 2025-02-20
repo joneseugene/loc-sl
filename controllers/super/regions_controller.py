@@ -1,13 +1,16 @@
 from datetime import datetime
 from typing import List
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from utils.database import get_db
 from domain.models.region_model import Region  
 from domain.schema.region_schema import RegionCreate, RegionRead, RegionSoftDelete, RegionUpdate
 from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
+import pandas as pd
+
 
 router = APIRouter(tags=["SuperAdmin Regions"], dependencies=[Depends(has_role(1))] )
 
@@ -64,6 +67,66 @@ async def create_region(region: RegionCreate, db: Session = Depends(get_db)):
     db.refresh(new_region)
     return success_response(data=jsonable_encoder(RegionRead.from_orm(new_region)))
 
+# UPLOAD REGION
+@router.post("/super/regions/upload")
+async def upload_regions_csv(
+    file: UploadFile = File(...), db: Session = Depends(get_db)
+):
+    try:
+        # Read the CSV file into a DataFrame
+        df = pd.read_csv(file.file)
+
+        # Check if required column exists
+        if "name" not in df.columns:
+            return error_response(status_code=400, error_message="CSV must contain a 'name' column.")
+
+        processed_regions = []
+
+        for _, row in df.iterrows():
+            name = row["name"].strip()
+
+            # Check if the region exists in the database
+            existing_region = db.query(Region).filter(Region.name == name).first()
+
+            if existing_region:
+                # If the region is marked deleted, skip it
+                if existing_region.active is False and existing_region.deleted is True:
+                    continue
+                
+                # Update existing record
+                existing_region.updated_at = datetime.utcnow()
+                existing_region.updated_by = "System"
+
+            else:
+                # Insert new record
+                new_region = Region(
+                    name=name,
+                    created_at=datetime.utcnow(),
+                    created_by="System",
+                    updated_at=datetime.utcnow(),
+                    updated_by="System",
+                    active=True,
+                    deleted=False,
+                )
+                db.add(new_region)
+            
+            processed_regions.append(name)
+
+        db.commit()
+        return success_response(
+            message=f"CSV processed successfully. Regions updated/added: {len(processed_regions)}",
+            data=processed_regions,
+        )
+
+    except pd.errors.EmptyDataError:
+        return error_response(status_code=400, error_message="CSV file is empty.")
+    except SQLAlchemyError as e:
+        db.rollback()
+        return error_response(status_code=500, error_message=f"Database error: {str(e)}")
+    except Exception as e:
+        return error_response(status_code=500, error_message=f"Error processing CSV: {str(e)}")
+
+
 # UPDATE REGION
 @router.put("/super/regions/{id}", response_model=RegionRead)
 async def update_region(id: int, region_data: RegionUpdate, db: Session = Depends(get_db)):
@@ -106,3 +169,5 @@ async def soft_delete_region(id: int, delete_data: RegionSoftDelete, db: Session
         return success_response(message="Region successfully deleted")
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
+    
+

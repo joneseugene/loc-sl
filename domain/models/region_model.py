@@ -2,7 +2,6 @@
 
 from sqlalchemy import Column, Integer, String, Float, event
 from sqlalchemy.orm import relationship
-
 from utils.functions import generate_slug
 from .spine_model import Spine
 

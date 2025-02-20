@@ -34,6 +34,9 @@ pip install fastapi-limiter aioredis
 # Slugify
 pip install python-slugify
 
+# Pandas
+pip install pandas
+
 
 
 
