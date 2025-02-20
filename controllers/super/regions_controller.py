@@ -136,57 +136,54 @@ async def upload_regions_csv(
 
 
 
-@router.get("/super/regions/export", response_class=StreamingResponse)
+@router.post("/super/regions/export-csv", response_class=StreamingResponse)
 async def export_regions_csv(db: AsyncSession = Depends(get_db)):
     try:
-        # Select regions from the database
         stmt = select(Region).filter(Region.active == True, Region.deleted == False)
         result = await db.execute(stmt)
         regions = result.scalars().all()
 
         if not regions:
-            # If no regions found, return an error response
             return error_response(status_code=404, error_message="No regions found to export.")
 
-        # CSV headers
-        csv_headers = ["ID", "Name", "Slug", "Longitude", "Latitude", "Created At", "Created By", "Updated At", "Updated By"]
+        # Define CSV headers
+        csv_headers = ["No", "Name", "Slug", "Longitude", "Latitude"]
 
-        # Create CSV data
+        # Create a StringIO object to hold the CSV data
         csv_data = StringIO()
         csv_writer = csv.writer(csv_data)
+
+        # Write the headers to the CSV
         csv_writer.writerow(csv_headers)
 
-        # Write each region's data to the CSV
-        for region in regions:
-            csv_writer.writerow([  
-                region.id,
+        # Add the row number (No) and data for each region
+        for idx, region in enumerate(regions, start=1):  # start=1 to begin the "No" column at 1
+            csv_writer.writerow([
+                idx,  # Row number (No)
                 region.name,
                 region.slug,
                 region.lon,
                 region.lat,
-                region.created_at,
-                region.created_by,
-                region.updated_at,
-                region.updated_by
             ])
 
-        # Move the cursor to the beginning of the CSV data
+        # Rewind the StringIO object to the beginning for streaming
         csv_data.seek(0)
 
-        # Return the CSV as a StreamingResponse
+        # Return the CSV data as a streaming response
         return StreamingResponse(
             iter([csv_data.getvalue()]),
-            media_type="text/csv",  # Ensure the content type is text/csv
+            media_type="text/csv",
             headers={
-                "Content-Disposition": "attachment; filename=regions.csv",  # Force download as CSV
-                "Content-Length": str(len(csv_data.getvalue())),  # Set content length
+                "Content-Disposition": "attachment; filename=regions.csv",
+                "Content-Length": str(len(csv_data.getvalue())),
             }
         )
 
     except Exception as e:
-        # If any error occurs, log the exception and return a generic error response
+        # Handle errors and return an appropriate response
         return error_response(status_code=500, error_message=f"Error generating CSV: {str(e)}")
-    
+
+
 
 # UPDATE REGION
 @router.put("/super/regions/{id}", response_model=RegionRead)
