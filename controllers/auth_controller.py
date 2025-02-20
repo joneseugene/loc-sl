@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy.future import select 
+from utils.consts import USER
 from utils.database import get_db
 from domain.models.user_model import User  
 from domain.schema.user_schema import UserCreate, UserLogin, UserRead
@@ -16,8 +18,11 @@ router = APIRouter(tags=["Auth"])
 @router.post("/register", response_model=UserRead)
 async def register(user: UserCreate, db: Session = Depends(get_db)):
     try:
-        if db.query(User).filter(User.email == user.email).first():
-            return error_response(status_code=400, error_message="user already registered")
+        result = await db.execute(select(User).filter(User.email == user.email))
+        db_user = result.scalar_one_or_none()
+
+        if db_user:
+            return error_response(status_code=400, error_message="User already registered")
 
         hashed_password = hash_password(user.password)
         new_user = User(
@@ -26,25 +31,26 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
             email=user.email,
             organization=user.organization,
             password=hashed_password,
-            role_id=3,  # Default role
+            role_id= USER,  # Default role
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
         db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
+        await db.commit()  
+        await db.refresh(new_user)
 
         return success_response(data=jsonable_encoder(UserRead.from_orm(new_user)), message="User registered successfully")
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
     
 
-
 # LOGIN
 @router.post("/login")
 async def login(user: UserLogin, db: Session = Depends(get_db)):
     try:
-        db_user = db.query(User).filter(User.email == user.email).first()
+        result = await db.execute(select(User).filter(User.email == user.email))
+        db_user = result.scalar_one_or_none()
+        
         if not db_user or not verify_password(user.password, db_user.password):
             return error_response(status_code=400, error_message="Invalid email or password")
         

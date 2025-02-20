@@ -7,7 +7,7 @@ python -m uvicorn main:app --reload
 pip install fastapi uvicorn
 
 # Install Database Dependencies
-pip install sqlalchemy psycopg2-binary alembic
+pip install sqlalchemy asyncpg alembic
 
 # Install Pydantic for validation
 pip install pydantic
@@ -16,10 +16,6 @@ pip install pydantic
 pip install python-jose[cryptography] passlib bcrypt python-multipart
 pip install pydantic[email]
 pip install pyjwt
-
-
-# Install Dependency Injection
-pip install fastapi-depends
 
 # Install Dotenv
 pip install python-dotenv
@@ -36,6 +32,9 @@ pip install python-slugify
 
 # Pandas
 pip install pandas
+
+# Install from requirements.txt
+pip install -r requirements.txt
 
 
 

@@ -1,20 +1,25 @@
-# models/district_model.py
-
-from sqlalchemy import Column, Integer, String, Float, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import Integer, String, Float, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .spine_model import Spine
 
 class Ward(Spine):
-    __tablename__ = "ward"
+    __tablename__ = "wards"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
-    slug = Column(String, unique=True, index=True)
-    lon = Column(Float)
-    lat = Column(Float)
-    region_id = Column(Integer, ForeignKey("regions.id"))
-    district_id = Column(Integer, ForeignKey("districts.id"))
-    constituency_id = Column(Integer, ForeignKey("constituencies.id"))
-    region = relationship("Region", back_populates="wards")
-    district = relationship("District", back_populates="wards")
-    constituency = relationship("Constituency", back_populates="wards")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, unique=True, index=True)
+    slug: Mapped[str] = mapped_column(String, unique=True, index=True)
+    lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    region_id: Mapped[int] = mapped_column(Integer, ForeignKey("regions.id"))
+    district_id: Mapped[int] = mapped_column(Integer, ForeignKey("districts.id"))
+    constituency_id: Mapped[int] = mapped_column(Integer, ForeignKey("constituencies.id"))
+
+    # Relationships
+    region: Mapped["Region"] = relationship(back_populates="wards")
+    district: Mapped["District"] = relationship(back_populates="wards")
+    constituency: Mapped["Constituency"] = relationship(back_populates="wards")
+
+    # Import models after class definition
+from .region_model import Region
+from .district_model import District
+from .constituency_model import Constituency

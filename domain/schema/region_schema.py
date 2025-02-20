@@ -24,6 +24,7 @@ class RegionRead(RegionBase):
 
     class Config:
         orm_mode = True
+        from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat()  
         }
@@ -35,9 +36,11 @@ class RegionUpdate(BaseModel):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 class RegionSoftDelete(BaseModel):
     deleted_reason: Optional[str] = None 
 
     class Config:
         orm_mode = True
+        from_attributes = True

@@ -1,0 +1,32 @@
+# FastAPI and ASGI server
+fastapi
+uvicorn
+
+# Database Dependencies
+sqlalchemy
+asyncpg
+alembic
+
+# Pydantic for validation
+pydantic
+pydantic[email]
+
+# JWT Authentication
+python-jose[cryptography]
+passlib
+bcrypt
+python-multipart
+pyjwt
+
+# Environment Variables
+python-dotenv
+
+# Request Limiting
+setuptools
+aioredis
+
+# Slugify
+python-slugify
+
+# Pandas for Data Processing
+pandas

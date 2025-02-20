@@ -25,14 +25,14 @@ def success_response(data: Union[BaseModel, List[BaseModel], dict, List[dict], N
     )
 
 
-def error_response(status_code: int, error_message: str):
+def error_response(status_code: int, error_message: str, details: Any = None):
     return JSONResponse(
         status_code=status_code,
         content={
             "status": "failure",
             "status_code": status_code,
             "error_message": error_message,
-            "data": []
+            "details": details if details else [],
         }
     )
     

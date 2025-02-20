@@ -8,8 +8,13 @@ from domain.schema.user_schema import UserCreate, UserLogin, UserRead
 from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
+import pandas as pd
+import csv
+from io import StringIO
+from fastapi.responses import StreamingResponse
 
-router = APIRouter(tags=["SuperAdmin Users"], dependencies=[Depends(has_role(1))] )
+
+router = APIRouter(tags=["Super Users"], dependencies=[Depends(has_role(1))] )
 
 # FETCH ALL
 @router.get("/super/users", response_model=List[UserRead])

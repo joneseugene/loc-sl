@@ -1,20 +1,24 @@
-# models/district_model.py
-
-from sqlalchemy import Column, Integer, String, Float, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import Integer, String, Float, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .spine_model import Spine
 
 class Constituency(Spine):
     __tablename__ = "constituencies"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
-    slug = Column(String, unique=True, index=True)
-    lon = Column(Float)
-    lat = Column(Float)
-    region_id = Column(Integer, ForeignKey("regions.id"))
-    district_id = Column(Integer, ForeignKey("districts.id"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, unique=True, index=True)
+    slug: Mapped[str] = mapped_column(String, unique=True, index=True)
+    lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    region_id: Mapped[int] = mapped_column(Integer, ForeignKey("regions.id"))
+    district_id: Mapped[int] = mapped_column(Integer, ForeignKey("districts.id"))
+
     # Relationships
-    region = relationship("Region", back_populates="constituencies")
-    district = relationship("District", back_populates="constituencies")
-    wards = relationship("Ward", back_populates="constituency")
+    region: Mapped["Region"] = relationship(back_populates="constituencies")
+    district: Mapped["District"] = relationship(back_populates="constituencies")
+    wards: Mapped[list["Ward"]] = relationship(back_populates="constituency", cascade="all, delete-orphan")
+
+    # Import models after class definition
+from .region_model import Region
+from .district_model import District
+from .ward_model import Ward

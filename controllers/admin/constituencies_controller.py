@@ -13,10 +13,10 @@ import csv
 from io import StringIO
 from fastapi.responses import StreamingResponse
 
-router =  APIRouter(tags=["Super Constituencies"], dependencies=[Depends(has_role(1))] )
+router =  APIRouter(tags=["Admin Constituencies"], dependencies=[Depends(has_role(2))] )
 
 # FETCH ALL
-@router.get("/super/constituencies", response_model=List[ConstituencyRead])
+@router.get("/admin/constituencies", response_model=List[ConstituencyRead])
 async def get_constituencies(db: Session = Depends(get_db)):
     try:
         constituencies = db.query(Constituency).filter(Constituency.active == True, Constituency.deleted == False).all()
@@ -30,7 +30,7 @@ async def get_constituencies(db: Session = Depends(get_db)):
 
 
 # FIND BY ID
-@router.get("/super/constituencies/{id}", response_model=ConstituencyRead)
+@router.get("/admin/constituencies/{id}", response_model=ConstituencyRead)
 async def get_constituency_by_id(id: int, db: Session = Depends(get_db)):
     try:
         constituency = db.query(Constituency).filter(Constituency.id == id, Constituency.active == True, Constituency.deleted == False).first()
@@ -43,7 +43,7 @@ async def get_constituency_by_id(id: int, db: Session = Depends(get_db)):
     
 
 # FIND BY REGION ID
-@router.get("/super/constituencies/region/{region_id}", response_model=List[ConstituencyRead])
+@router.get("/admin/constituencies/region/{region_id}", response_model=List[ConstituencyRead])
 async def get_constituency_by_region_id(region_id: int, db: Session = Depends(get_db)):
     try:
         constituency = db.query(Constituency).filter(Constituency.region_id == region_id, Constituency.active == True, Constituency.deleted == False).first()
@@ -56,7 +56,7 @@ async def get_constituency_by_region_id(region_id: int, db: Session = Depends(ge
     
 
 # FIND BY DISTRICT ID
-@router.get("/super/constituencies/district/{district_id}", response_model=List[ConstituencyRead])
+@router.get("/admin/constituencies/district/{district_id}", response_model=List[ConstituencyRead])
 async def get_constituency_by_district_id(district_id: int, db: Session = Depends(get_db)):
     try:
         constituency = db.query(constituency).filter(Constituency.district_id == district_id, Constituency.active == True, Constituency.deleted == False).first()
@@ -69,7 +69,7 @@ async def get_constituency_by_district_id(district_id: int, db: Session = Depend
 
 
 # FIND BY NAME
-@router.get("/super/constituencies/name/{name}", response_model=ConstituencyRead)
+@router.get("/admin/constituencies/name/{name}", response_model=ConstituencyRead)
 async def get_constituency_by_name(name: str, db: Session = Depends(get_db)):
     try:
         constituency = db.query(Constituency).filter(Constituency.name == name, Constituency.active == True, Constituency.deleted == False).first()
@@ -82,7 +82,7 @@ async def get_constituency_by_name(name: str, db: Session = Depends(get_db)):
 
 
 # CREATE
-@router.post("/super/constituencies", response_model=ConstituencyCreate)
+@router.post("/admin/constituencies", response_model=ConstituencyCreate)
 async def create_constituency(constituency: ConstituencyCreate, db: Session = Depends(get_db)):
     existing_constituency = db.query(Constituency).filter(Constituency.name == constituency.name).first()
 
@@ -97,7 +97,7 @@ async def create_constituency(constituency: ConstituencyCreate, db: Session = De
 
 
 # UPDATE constituency
-@router.put("/super/constituencies/{id}", response_model=ConstituencyRead)
+@router.put("/admin/constituencies/{id}", response_model=ConstituencyRead)
 async def update_constituency(id: int, constituency_data: ConstituencyUpdate, db: Session = Depends(get_db)):
     try:
         constituency = db.query(Constituency).filter(Constituency.id == id).first()
@@ -121,7 +121,7 @@ async def update_constituency(id: int, constituency_data: ConstituencyUpdate, db
 
 
 # SOFT DELETE constituency
-@router.delete("/super/constituencies/{id}")
+@router.delete("/admin/constituencies/{id}")
 async def soft_delete_constituency(id: int, delete_data: ConstituencySoftDelete, db: Session = Depends(get_db)):
     try:
         constituency = db.query(Constituency).filter(Constituency.id == id, Constituency.deleted == False).first()

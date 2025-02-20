@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserBase(BaseModel):
-    first_name: str
-    last_name: str
+    first_name: str = Field(..., max_length=100)
+    last_name: str = Field(..., max_length=100)
     email: EmailStr
     organization: Optional[str] = None
 
@@ -26,6 +26,7 @@ class UserRead(UserBase):
 
     class Config:
         orm_mode = True
+        from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
@@ -40,6 +41,7 @@ class UserUpdate(BaseModel):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 class UserSoftDelete(BaseModel):
@@ -47,6 +49,7 @@ class UserSoftDelete(BaseModel):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 class UserLogin(BaseModel):

@@ -24,6 +24,7 @@ class DistrictRead(DistrictBase):
 
     class Config:
         orm_mode = True
+        from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat()  
         }
@@ -36,9 +37,11 @@ class DistrictUpdate(BaseModel):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 class DistrictSoftDelete(BaseModel):
     deleted_reason: Optional[str] = None 
 
     class Config:
         orm_mode = True
+        from_attributes = True

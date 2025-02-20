@@ -1,15 +1,19 @@
-from sqlalchemy import Column, DateTime, Boolean, String
+from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
+from sqlalchemy import DateTime, Boolean, String
 from datetime import datetime
-from utils.database import Base
+
+class Base(DeclarativeBase):
+    pass 
 
 class Spine(Base):
     __abstract__ = True  
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=True)
-    deleted_at = Column(DateTime, nullable=True)
-    active = Column(Boolean, default=True)
-    deleted = Column(Boolean, default=False)
-    deleted_reason = Column(String, nullable=True)
-    created_by = Column(String, nullable=True)
-    updated_by = Column(String, nullable=True)
-    deleted_by = Column(String, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, onupdate=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=lambda: True)
+    deleted: Mapped[bool] = mapped_column(Boolean, default=lambda: False)
+    deleted_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    deleted_by: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -22,6 +22,7 @@ class RoleRead(RoleBase):
 
     class Config:
         orm_mode = True
+        from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
@@ -32,6 +33,7 @@ class RoleUpdate(BaseModel):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 class RoleSoftDelete(BaseModel):
@@ -39,3 +41,4 @@ class RoleSoftDelete(BaseModel):
 
     class Config:
         orm_mode = True
+        from_attributes = True
