@@ -39,7 +39,7 @@ async def get_district_by_id(id: int, db: Session = Depends(get_db)):
     
 
 # FIND BY REGION ID
-@router.get("/super/districts/{region_id}", response_model=DistrictRead)
+@router.get("/super/districts/region/{region_id}", response_model=List[DistrictRead])
 async def get_district_by_id(region_id: int, db: Session = Depends(get_db)):
     try:
         district = db.query(District).filter(District.region_id == region_id, District.active == True, District.deleted == False).first()

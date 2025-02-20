@@ -3,18 +3,19 @@ from typing import Optional
 from pydantic import BaseModel
 from pydantic.json import custom_pydantic_encoder
 
-class ConstituencyBase(BaseModel):
+class WardBase(BaseModel):
     name: str
     slug: Optional[str] = None
     lon: float
     lat: float
     region_id: int
     district_id: int
+    constituency_id: int
 
-class ConstituencyCreate(ConstituencyBase):
+class WardCreate(WardBase):
     pass
 
-class ConstituencyRead(ConstituencyBase):
+class WardRead(WardBase):
     id: int
     active: bool
     deleted: bool
@@ -29,17 +30,18 @@ class ConstituencyRead(ConstituencyBase):
             datetime: lambda v: v.isoformat()  
         }
 
-class ConstituencyUpdate(BaseModel):
+class WardUpdate(BaseModel):
     name: Optional[str] = None
     lon: Optional[float] = None
     lat: Optional[float] = None
     region_id: Optional[int] = None
     district_id: Optional[int] = None
+    constituency_id: Optional[int] = None
 
     class Config:
         orm_mode = True
 
-class ConstituencySoftDelete(BaseModel):
+class WardSoftDelete(BaseModel):
     deleted_reason: Optional[str] = None 
 
     class Config:
