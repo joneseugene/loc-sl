@@ -2,28 +2,28 @@ from datetime import datetime
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from utils.consts import SUPER
 from utils.database import get_db
 from domain.models.user_model import User  
-from domain.schema.user_schema import UserCreate, UserLogin, UserRead
+from domain.schema.user_schema import UserRead
 from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
-import pandas as pd
-import csv
-from io import StringIO
-from fastapi.responses import StreamingResponse
+from sqlalchemy.future import select
 
 
-router = APIRouter(tags=["Super Users"], dependencies=[Depends(has_role(1))] )
+router = APIRouter(tags=["Super Users"], dependencies=[Depends(has_role(SUPER))] )
 
 # FETCH ALL
 @router.get("/super/users", response_model=List[UserRead])
-async def get_users(db: Session = Depends(get_db)):
+def get_users(db: Session = Depends(get_db)):
     try:
-        users = db.query(User).filter(User.active == True, User.deleted == False).all()
-        # Serialize each user object
-        user_data = [jsonable_encoder(UserRead.from_orm(user)) for user in users]
+        stmt = select(User).filter(User.active == True, User.deleted == False)
+        result = db.execute(stmt)
+        users = result.scalars().all()
         
+        # Serialize object
+        user_data = [jsonable_encoder(UserRead.from_orm(user)) for user in users]
         return success_response(data=user_data)
     except Exception as e:
         print("Error fetching users:", e)

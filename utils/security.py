@@ -1,15 +1,17 @@
 from typing import Any
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from jose import jwt, JWTError
+from jose import jwt
 from datetime import datetime, timedelta
-from fastapi import HTTPException, Depends
+from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from domain.models.user_model import User
 from utils.database import get_db
 from dotenv import load_dotenv
 import jwt
 import os
+
+from utils.http_response import error_response
 
 # Environment variables
 load_dotenv()
@@ -41,15 +43,16 @@ def decode_jwt(token: str) -> Any:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[HASHING_ALGORITHM])
         return payload 
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.JWTError:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        raise HTTPException(status_code=401, detail="token has expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="invalid credentials")
 
 def get_user_from_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     payload = decode_jwt(token)
-    email_value = payload.get("sub") # Extract the sub field
+    email_value = payload.get("sub") 
     user = db.query(User).filter(User.email == email_value).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="user not found")
     return user
 
+from sqlalchemy.event import listens_for

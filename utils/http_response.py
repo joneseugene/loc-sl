@@ -10,7 +10,7 @@ def success_response(data: Union[BaseModel, List[BaseModel], dict, List[dict], N
     elif isinstance(data, BaseModel):
         data = data.dict()
     elif isinstance(data, dict):
-        pass  # Already a dictionary, do nothing
+        pass
     else:
         data = []
 
@@ -25,14 +25,14 @@ def success_response(data: Union[BaseModel, List[BaseModel], dict, List[dict], N
     )
 
 
-def error_response(status_code: int, error_message: str, details: Any = None):
+def error_response(status_code: int, error_message: str,):
     return JSONResponse(
         status_code=status_code,
         content={
             "status": "failure",
             "status_code": status_code,
             "error_message": error_message,
-            "details": details if details else [],
+            "data": [],
         }
     )
     

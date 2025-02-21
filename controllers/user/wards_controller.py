@@ -1,24 +1,22 @@
-from datetime import datetime
 from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from utils.consts import ADMIN
+from utils.consts import USER
 from utils.database import get_db
 from domain.models.ward_model import Ward
-from domain.schema.ward_schema import WardCreate, WardRead, WardSoftDelete, WardUpdate
+from domain.schema.ward_schema import WardRead
 from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
 from io import StringIO
 from fastapi.responses import StreamingResponse
 from sqlalchemy.future import select
-import pandas as pd
 import csv
 
-router = APIRouter(tags=["Admin Wards"], dependencies=[Depends(has_role(ADMIN))])
+router = APIRouter(tags=["User Wards"], dependencies=[Depends(has_role(USER))])
 
 # FETCH ALL
-@router.get("/admin/wards", response_model=List[WardRead])
+@router.get("/user/wards", response_model=List[WardRead])
 def get_wards(db: Session = Depends(get_db)):
     try:
         stmt = select(Ward).filter(Ward.active == True, Ward.deleted == False)
@@ -33,7 +31,7 @@ def get_wards(db: Session = Depends(get_db)):
         return error_response(status_code=500, error_message=str(e))
 
 # FIND BY ID
-@router.get("/admin/wards/{id}", response_model=WardRead)
+@router.get("/user/wards/{id}", response_model=WardRead)
 def get_ward_by_id(id: int, db: Session = Depends(get_db)):
     try:
         stmt = select(Ward).filter(Ward.id == id, Ward.active == True, Ward.deleted == False)
@@ -49,7 +47,7 @@ def get_ward_by_id(id: int, db: Session = Depends(get_db)):
 
 
 # FIND BY REGION ID
-@router.get("/admin/wards/region/{region_id}", response_model=List[WardRead])
+@router.get("/user/wards/region/{region_id}", response_model=List[WardRead])
 def get_ward_by_region_id(region_id: int, db: Session = Depends(get_db)):
     try:
         stmt = select(Ward).filter(Ward.region_id == region_id, Ward.active == True, Ward.deleted == False)
@@ -65,7 +63,7 @@ def get_ward_by_region_id(region_id: int, db: Session = Depends(get_db)):
 
 
 # FIND BY DISTRICT ID
-@router.get("/admin/wards/district/{district_id}", response_model=List[WardRead])
+@router.get("/user/wards/district/{district_id}", response_model=List[WardRead])
 def get_ward_by_district_id(district_id: int, db: Session = Depends(get_db)):
     try:
         stmt = select(Ward).filter(Ward.district_id == district_id, Ward.active == True, Ward.deleted == False)
@@ -81,7 +79,7 @@ def get_ward_by_district_id(district_id: int, db: Session = Depends(get_db)):
 
 
 # FIND BY CONSTITUENCY ID
-@router.get("/admin/wards/constituency/{constituency_id}", response_model=List[WardRead])
+@router.get("/user/wards/constituency/{constituency_id}", response_model=List[WardRead])
 def get_wards_by_constituency_id(constituency_id: int, db: Session = Depends(get_db)):
     try:
         stmt = select(Ward).filter(Ward.constituency_id == constituency_id, Ward.active == True, Ward.deleted == False)
@@ -97,7 +95,7 @@ def get_wards_by_constituency_id(constituency_id: int, db: Session = Depends(get
 
 
 # FIND BY NAME
-@router.get("/admin/wards/name/{name}", response_model=WardRead)
+@router.get("/user/wards/name/{name}", response_model=WardRead)
 def get_ward_by_name(name: str, db: Session = Depends(get_db)):
     try:
         stmt = select(Ward).filter(Ward.name == name, Ward.active == True, Ward.deleted == False)
@@ -112,129 +110,7 @@ def get_ward_by_name(name: str, db: Session = Depends(get_db)):
         return error_response(status_code=500, error_message=str(e))
 
 
-# CREATE
-@router.post("/admin/wards", response_model=WardCreate)
-def create_ward(ward: WardCreate, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.name == ward.name)
-        result = db.execute(stmt)
-        existing_ward = result.scalar_one_or_none()
-
-        if existing_ward:
-            return error_response(status_code=400, error_message="ward already exists")
-        
-        new_data = Ward(name=ward.name, lon=ward.lon, lat=ward.lat, region_id=ward.region_id, district_id=ward.district_id, constituency_id=ward.constituency_id)
-        db.add(new_data)
-        db.commit()
-        db.refresh(new_data)
-
-        return success_response(data=jsonable_encoder(WardRead.from_orm(new_data)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-# UPDATE WARD
-@router.put("/admin/wards/{id}", response_model=WardRead)
-def update_ward(id: int, ward_data: WardUpdate, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.id == id)
-        result = db.execute(stmt)
-        ward = result.scalar_one_or_none()
-
-        if not ward:
-            return error_response(status_code=404, error_message="ward not found")
-        
-        update_data = ward_data.dict(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(ward, key, value)
-
-        ward.updated_at = datetime.utcnow()
-        ward.updated_by = "System"
-
-        db.commit()
-        db.refresh(ward)
-
-        return success_response(data=jsonable_encoder(WardRead.from_orm(ward)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-# SOFT DELETE WARD
-@router.delete("/admin/wards/{id}")
-def soft_delete_ward(id: int, delete_data: WardSoftDelete, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.id == id, Ward.deleted == False)
-        result = db.execute(stmt)
-        ward = result.scalar_one_or_none()
-
-        if not ward:
-            return error_response(status_code=404, error_message="ward not found or already deleted")
-
-        ward.deleted = True
-        ward.deleted_at = datetime.utcnow()
-        ward.deleted_by = "System"
-        ward.deleted_reason = delete_data.deleted_reason
-
-        db.commit()
-
-        return success_response(message="ward successfully deleted")
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-    
-
-# UPLOAD CONSTITUENCIES
-@router.post("/admin/wards/upload")
-def upload_wards_csv(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
-):
-    try:
-        df = pd.read_csv(file.file)
-
-        if "name" not in df.columns:
-            return error_response(status_code=400, error_message="csv must contain a 'name' column.")
-
-        processed_wards = []
-
-        for _, row in df.iterrows():
-            name = row["name"].strip()
-
-            stmt = select(Ward).filter(Ward.name == name)
-            result = db.execute(stmt)
-            existing_wards = result.scalars().first()
-
-            if existing_wards:
-                if existing_wards.active is False and existing_wards.deleted is True:
-                    continue
-                existing_wards.updated_at = datetime.utcnow()
-                existing_wards.updated_by = "System"
-            else:
-                new_wards = Ward(
-                    name=name,
-                    created_at=datetime.utcnow(),
-                    created_by="System",
-                    updated_at=datetime.utcnow(),
-                    updated_by="System",
-                    active=True,
-                    deleted=False,
-                )
-                db.add(new_wards)
-            
-            processed_wards.append(name)
-
-        db.commit()
-        return success_response(
-            message=f"csv processed successfully. Ward updated/added: {len(processed_wards)}",
-            data=processed_wards,
-        )
-
-    except pd.errors.EmptyDataError:
-        return error_response(status_code=400, error_message="csv file is empty.")
-    except Exception as e:
-        return error_response(status_code=500, error_message=f"Error processing CSV: {str(e)}")
-
-
-
-@router.post("/admin/wards/export-csv", response_class=StreamingResponse)
+@router.post("/user/wards/export-csv", response_class=StreamingResponse)
 def export_wards_csv(db: Session = Depends(get_db)):
     try:
         stmt = select(Ward).filter(Ward.active == True, Ward.deleted == False)

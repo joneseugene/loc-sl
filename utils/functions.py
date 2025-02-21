@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from slugify import slugify
 from domain.models.user_model import User
 from domain.schema.user_schema import UserCreate
+from utils.consts import USER
+from utils.http_response import error_response
 from utils.security import get_user_from_token, hash_password
 
 
@@ -19,7 +21,7 @@ def create_user(db: Session, user: UserCreate):
         email=user.email,
         organization=user.organization,
         password=hashed_password,
-        role_id=3  # Default role
+        role_id=USER  # Default role
     )
     db.add(new_user)
     db.commit()

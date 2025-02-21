@@ -1,6 +1,5 @@
 from datetime import datetime
-from typing import List
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select 
 from utils.consts import USER
@@ -16,13 +15,13 @@ router = APIRouter(tags=["Auth"])
 
 # REGISTER
 @router.post("/register", response_model=UserRead)
-async def register(user: UserCreate, db: Session = Depends(get_db)):
+def register(user: UserCreate, db: Session = Depends(get_db)):
     try:
-        result = await db.execute(select(User).filter(User.email == user.email))
-        db_user = result.scalar_one_or_none()
+        result = db.execute(select(User).filter(User.email == user.email))
+        db_user = result.scalars().first()  
 
         if db_user:
-            return error_response(status_code=400, error_message="User already registered")
+            return error_response(status_code=400, error_message="user already exists")
 
         hashed_password = hash_password(user.password)
         new_user = User(
@@ -31,29 +30,32 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
             email=user.email,
             organization=user.organization,
             password=hashed_password,
-            role_id= USER,  # Default role
+            role_id=USER,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
         db.add(new_user)
-        await db.commit()  
-        await db.refresh(new_user)
+        db.commit()
+        db.refresh(new_user)
 
-        return success_response(data=jsonable_encoder(UserRead.from_orm(new_user)), message="User registered successfully")
+        return success_response(
+            data=jsonable_encoder(UserRead.from_orm(new_user)),
+            message="user registered successfully"
+        )
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
+ 
     
-
 # LOGIN
 @router.post("/login")
-async def login(user: UserLogin, db: Session = Depends(get_db)):
+def login(user: UserLogin, db: Session = Depends(get_db)):
     try:
-        result = await db.execute(select(User).filter(User.email == user.email))
-        db_user = result.scalar_one_or_none()
-        
+        result = db.execute(select(User).filter(User.email == user.email))
+        db_user = result.scalars().first()  
+
         if not db_user or not verify_password(user.password, db_user.password):
-            return error_response(status_code=400, error_message="Invalid email or password")
-        
+            return error_response(status_code=400, error_message="invalid email or password")
+
         # Token Info
         access_token, expiry_time = create_access_token(data={
             "sub": db_user.email,
@@ -62,14 +64,13 @@ async def login(user: UserLogin, db: Session = Depends(get_db)):
             "organization": db_user.organization
         })
 
-        # Response
         return success_response(
             data={
                 "access_token": access_token,
                 "token_type": "Bearer",
-                "expires_at": expiry_time.isoformat()  
+                "expires_at": expiry_time.isoformat()
             },
-            message="Authentication successful"
+            message="authentication successful"
         )
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))

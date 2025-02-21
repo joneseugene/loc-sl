@@ -7,11 +7,11 @@ class District(Spine):
     __tablename__ = "districts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String, unique=True, index=True)
-    slug: Mapped[str] = mapped_column(String, unique=True, index=True)
+    name: Mapped[str | None] = mapped_column(String, unique=True, index=True)
+    slug: Mapped[str | None] = mapped_column(String, unique=True, index=True)
     lon: Mapped[float | None] = mapped_column(Float, nullable=True)
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
-    region_id: Mapped[int] = mapped_column(Integer, ForeignKey("regions.id"))
+    region_id: Mapped[int| None] = mapped_column(Integer, ForeignKey("regions.id"))
 
     # Relationships (Updated)
     region: Mapped["Region"] = relationship(back_populates="districts")
