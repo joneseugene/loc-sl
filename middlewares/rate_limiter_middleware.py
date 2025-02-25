@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 
 rate_limit_store = {}
 
-def rate_limit_middleware(request: Request, call_next):
+# Make the middleware asynchronous
+async def rate_limit_middleware(request: Request, call_next):
     ip = request.client.host  # Client IP
     route = request.url.path  # Requested route
 
@@ -33,5 +34,6 @@ def rate_limit_middleware(request: Request, call_next):
     # Add new request timestamp
     rate_limit_store[ip][route].append(now)
 
-    # Proceed with the next request
-    return call_next(request)
+    # Proceed with the next request asynchronously
+    response = await call_next(request)
+    return response
