@@ -44,11 +44,7 @@ app.include_router(super_region_router, prefix="/api")
 app.include_router(super_district_router, prefix="/api")
 app.include_router(super_constituency_router, prefix="/api")
 app.include_router(super_ward_router, prefix="/api")
-# Routes for Admins
-app.include_router(admin_region_router, prefix="/api")
-app.include_router(admin_district_router, prefix="/api")
-app.include_router(admin_constituency_router, prefix="/api")
-app.include_router(admin_ward_router, prefix="/api")
+
 # Routes for Users
 app.include_router(user_region_router, prefix="/api")
 app.include_router(user_district_router, prefix="/api")

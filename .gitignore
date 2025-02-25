@@ -8,3 +8,4 @@
 # Ignore configuration files with sensitive data
 alembic.ini
 migrations/env.py
+my_env

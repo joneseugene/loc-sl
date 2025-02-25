@@ -2,7 +2,6 @@ from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta
 
-
 rate_limit_store = {}
 
 def rate_limit_middleware(request: Request, call_next):
@@ -34,4 +33,5 @@ def rate_limit_middleware(request: Request, call_next):
     # Add new request timestamp
     rate_limit_store[ip][route].append(now)
 
+    # Proceed with the next request
     return call_next(request)

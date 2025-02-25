@@ -1,6 +1,8 @@
-from typing import List
-from fastapi import APIRouter, Depends
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from domain.models.district_model import District
+from domain.models.region_model import Region
 from utils.consts import USER
 from utils.database import get_db
 from domain.models.constituency_model import Constituency 
@@ -10,103 +12,73 @@ from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
 from io import StringIO
 from fastapi.responses import StreamingResponse
+from utils.pagination_sorting import PaginationParams, paginate_and_sort
 from sqlalchemy.future import select
 import csv
 
 router =  APIRouter(tags=["User Constituencies"], dependencies=[Depends(has_role(USER))] )
 
 # FETCH ALL
-@router.get("/user/constituencies", response_model=List[ConstituencyRead])
-def get_constituencies(db: Session = Depends(get_db)):
+@router.get("/constituencies", response_model=List[ConstituencyRead])
+def get_constituencies(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),  
+    limit: int = Query(10, ge=1, le=100),  
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("asc"),
+    id: Optional[int] = Query(None),
+    name: Optional[str] = Query(None),
+    slug: Optional[str] = Query(None),
+    lon: Optional[float] = Query(None),
+    lat: Optional[float] = Query(None),
+    region_id: Optional[int] = Query(None),
+    district_id: Optional[int] = Query(None)
+):
     try:
-        stmt = select(Constituency).filter(Constituency.active == True, Constituency.deleted == False)
-        result = db.execute(stmt)
-        constituencies = result.scalars().all()
+        stmt = select(
+            Constituency,
+            Region.name.label("region_name"),
+            District.name.label("district_name")
+        ).join(Region, Constituency.region_id == Region.id
+        ).join(District, Constituency.district_id == District.id
+        ).filter(Constituency.active == True, Constituency.deleted == False)
 
-        # Serialize object
-        constituency_data = [jsonable_encoder(ConstituencyRead.from_orm(constituency)) for constituency in constituencies]
-        return success_response(data=constituency_data)
-    except Exception as e:
-        print("Error fetching constituencies:", e)
-        return error_response(status_code=500, error_message=str(e))
+        # Filters
+        if id is not None:
+            stmt = stmt.filter(Constituency.id == id)
+        if name:
+            stmt = stmt.filter(Constituency.name.ilike(f"%{name}%"))
+        if slug:
+            stmt = stmt.filter(Constituency.slug.ilike(f"%{slug}%"))
+        if lon is not None and lat is not None:
+            search_radius = 0.01
+            stmt = stmt.filter(
+                (Constituency.lon.between(lon - search_radius, lon + search_radius)) & 
+                (Constituency.lat.between(lat - search_radius, lat + search_radius))
+            )
+        if region_id is not None:
+            stmt = stmt.filter(Constituency.region_id == region_id)
+        if district_id is not None:
+            stmt = stmt.filter(Constituency.district_id == district_id)
 
-# FIND BY ID
-@router.get("/user/constituencies/{id}", response_model=ConstituencyRead)
-def get_constituency_by_id(id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Constituency).filter(Constituency.id == id, Constituency.active == True, Constituency.deleted == False)
-        result = db.execute(stmt)
-        constituency = result.scalar_one_or_none()
+        # Pagination and sorting
+        pagination_params = PaginationParams(skip=skip, limit=limit, sort_field=sort_field, sort_order=sort_order)
+        paginated_query = paginate_and_sort(stmt, pagination_params)
 
-        if not constituency:
-            return error_response(status_code=404, error_message="constituency not found")
-        
-        return success_response(data=jsonable_encoder(ConstituencyRead.from_orm(constituency)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
+        result = db.execute(paginated_query)
+        constituencies = result.all()  
 
-# FIND BY REGION ID
-@router.get("/user/constituencies/region/{region_id}", response_model=List[ConstituencyRead])
-def get_constituency_by_region_id(region_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Constituency).filter(Constituency.region_id == region_id, Constituency.active == True, Constituency.deleted == False)
-        result = db.execute(stmt)
-        constituencies = result.scalars().all()
+        return success_response(data=[{
+            **jsonable_encoder(ConstituencyRead.from_orm(constituency[0])),
+            "region_name": constituency[1],
+            "district_name": constituency[2], 
+        } for constituency in constituencies])
 
-        if not constituencies:
-            return error_response(status_code=404, error_message="constituency not found")
-        
-        return success_response(data=jsonable_encoder([ConstituencyRead.from_orm(constituency) for constituency in constituencies]))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-# FIND BY DISTRICT ID
-@router.get("/user/constituencies/district/{district_id}", response_model=List[ConstituencyRead])
-def get_constituency_by_district_id(district_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Constituency).filter(Constituency.district_id == district_id, Constituency.active == True, Constituency.deleted == False)
-        result = db.execute(stmt)
-        constituencies = result.scalars().all()
-
-        if not constituencies:
-            return error_response(status_code=404, error_message="constituency not found")
-        
-        return success_response(data=jsonable_encoder([ConstituencyRead.from_orm(constituency) for constituency in constituencies]))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-# FIND BY CONSTITUENCY ID
-@router.get("/user/constituencies/constituency/{constituencyn_id}", response_model=List[ConstituencyRead])
-def get_constituency_by_constituency_id(constituency_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Constituency).filter(Constituency.constituency_id == constituency_id, Constituency.active == True, Constituency.deleted == False)
-        result = db.execute(stmt)
-        constituencies = result.scalars().all()
-
-        if not constituencies:
-            return error_response(status_code=404, error_message="constituency not found")
-        
-        return success_response(data=jsonable_encoder([ConstituencyRead.from_orm(constituency) for constituency in constituencies]))
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# FIND BY NAME
-@router.get("/user/constituencies/name/{name}", response_model=ConstituencyRead)
-def get_constituency_by_name(name: str, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Constituency).filter(Constituency.name == name, Constituency.active == True, Constituency.deleted == False)
-        result = db.execute(stmt)
-        constituency = result.scalar_one_or_none()
-
-        if not constituency:
-            return error_response(status_code=404, error_message="constituency not found")
-        
-        return success_response(data=jsonable_encoder(ConstituencyRead.from_orm(constituency)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-# EXPORT CONSTITUENCIES
-@router.post("/user/constituencies/export-csv", response_class=StreamingResponse)
+# EXPORT
+@router.post("/constituencies/export-csv", response_class=StreamingResponse)
 def export_constituencies_csv(db: Session = Depends(get_db)):
     try:
         stmt = select(Constituency).filter(Constituency.active == True, Constituency.deleted == False)

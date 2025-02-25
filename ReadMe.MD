@@ -36,8 +36,8 @@ pip install pandas
 # Install from requirements.txt
 pip install -r requirements.txt
 
-
-
+# Track Locations
+pip install geopy
 
 
 
@@ -50,3 +50,4 @@ alembic revision --autogenerate -m "Initial migration"
 
 # Apply migration
 alembic upgrade head
+

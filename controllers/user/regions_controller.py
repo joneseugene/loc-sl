@@ -1,86 +1,69 @@
-from datetime import datetime
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, Query
 from utils.consts import USER
 from utils.database import get_db
 from domain.models.region_model import Region  
-from domain.schema.region_schema import RegionCreate, RegionRead
+from domain.schema.region_schema import RegionRead
 from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
 from io import StringIO
 from fastapi.responses import StreamingResponse
 from sqlalchemy.future import select
-import pandas as pd
+from utils.pagination_sorting import PaginationParams, paginate_and_sort
 import csv
 
 
-router = APIRouter(tags=["User Regions"], dependencies=[Depends(has_role(USER))] )
+router = APIRouter(tags=["Regions"], dependencies=[Depends(has_role(USER))] )
 
 # FETCH ALL
-@router.get("/user/regions", response_model=List[RegionRead])
-def get_regions(db: Session = Depends(get_db)):
+@router.get("/regions", response_model=List[RegionRead])
+def get_regions(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),  
+    limit: int = Query(10, ge=1, le=100),  
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("asc"),
+    id: Optional[int] = Query(None),
+    name: Optional[str] = Query(None),
+    slug: Optional[str] = Query(None),
+    lon: Optional[float] = Query(None),
+    lat: Optional[float] = Query(None)
+):
     try:
         stmt = select(Region).filter(Region.active == True, Region.deleted == False)
-        result = db.execute(stmt)
+
+        # Filters
+        if id is not None:
+            stmt = stmt.filter(Region.id == id)
+        if name:
+            stmt = stmt.filter(Region.name.ilike(f"%{name}%"))
+        if slug:
+            stmt = stmt.filter(Region.slug.ilike(f"%{slug}%"))
+        if lon is not None and lat is not None:
+            search_radius = 0.01
+            stmt = stmt.filter(
+                (Region.lon.between(lon - search_radius, lon + search_radius)) &
+                (Region.lat.between(lat - search_radius, lat + search_radius))
+            )
+
+        # Pagination and sorting
+        pagination_params = PaginationParams(skip=skip, limit=limit, sort_field=sort_field, sort_order=sort_order)
+        paginated_query = paginate_and_sort(stmt, pagination_params)
+
+        result = db.execute(paginated_query)
         regions = result.scalars().all()
-        
-        # Serialize object
-        region_data = [jsonable_encoder(RegionRead.from_orm(region)) for region in regions]
-        return success_response(data=region_data)
+
+        # Serialized Response
+        return success_response(data=[jsonable_encoder(RegionRead.from_orm(region)) for region in regions])
+
     except Exception as e:
         print("Error fetching regions:", e)
         return error_response(status_code=500, error_message=str(e))
-
-# FIND BY ID
-@router.get("/user/regions/{id}", response_model=RegionRead)
-def get_region_by_id(id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Region).filter(Region.id == id, Region.active == True, Region.deleted == False)
-        result = db.execute(stmt)
-        region = result.scalars().first()
-        if not region:
-            return error_response(status_code=404, error_message="Region not found")
-        return success_response(data=jsonable_encoder(RegionRead.from_orm(region)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-# FIND BY NAME
-@router.get("/user/regions/name/{name}", response_model=RegionRead)
-def get_region_by_name(name: str, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Region).filter(Region.name == name, Region.active == True, Region.deleted == False)
-        result = db.execute(stmt)
-        region = result.scalars().first()
-        if not region:
-            return error_response(status_code=404, error_message="Region not found")
-        return success_response(data=jsonable_encoder(RegionRead.from_orm(region)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-# CREATE
-@router.post("/user/regions", response_model=RegionCreate)
-def create_region(region: RegionCreate, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Region).filter(Region.name == region.name)
-        result = db.execute(stmt)
-        existing_region = result.scalars().first()
-        
-        if existing_region:
-            return error_response(status_code=400, error_message="Region already exists")
-
-        new_region = Region(name=region.name, lon=region.lon, lat=region.lat)
-        db.add(new_region)
-        db.commit()
-        db.refresh(new_region)
-        
-        return success_response(data=jsonable_encoder(RegionRead.from_orm(new_region)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-@router.post("/user/regions/export-csv", response_class=StreamingResponse)
+  
+# EXPORT
+@router.post("/regions/export-csv", response_class=StreamingResponse)
 def export_regions_csv(db: Session = Depends(get_db)):
     try:
         stmt = select(Region).filter(Region.active == True, Region.deleted == False)

@@ -1,6 +1,7 @@
-from typing import List
-from fastapi import APIRouter, Depends
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from domain.models.region_model import Region
 from utils.consts import USER
 from utils.database import get_db
 from domain.models.district_model import District  
@@ -11,71 +12,64 @@ from fastapi.encoders import jsonable_encoder
 from io import StringIO
 from fastapi.responses import StreamingResponse
 from sqlalchemy.future import select
+from utils.pagination_sorting import PaginationParams, paginate_and_sort
 import csv
 
-router = APIRouter(tags=["User Districts"], dependencies=[Depends(has_role(USER))] )
+
+router = APIRouter(tags=["Districts"], dependencies=[Depends(has_role(USER))] )
 
 # FETCH ALL
-@router.get("/user/districts", response_model=List[DistrictRead])
-def get_districts(db: Session = Depends(get_db)):
+@router.get("/districts", response_model=List[DistrictRead])
+def get_districts(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),  
+    limit: int = Query(10, ge=1, le=100),  
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("asc"),
+    id: Optional[int] = Query(None),
+    name: Optional[str] = Query(None),
+    slug: Optional[str] = Query(None),
+    lon: Optional[float] = Query(None),
+    lat: Optional[float] = Query(None),
+    region_id: Optional[int] = Query(None)
+):
     try:
-        stmt = select(District).filter(District.active == True, District.deleted == False)
-        result = db.execute(stmt)
-        districts = result.scalars().all()
+        stmt = select(District, Region.name.label("region_name")).join(Region, District.region_id == Region.id).filter(District.active == True, District.deleted == False)
 
-        # Serialize each district object
-        district_data = [jsonable_encoder(DistrictRead.from_orm(district)) for district in districts]
+        # Filters
+        if id is not None:
+            stmt = stmt.filter(District.id == id)
+        if name:
+            stmt = stmt.filter(District.name.ilike(f"%{name}%"))
+        if slug:
+            stmt = stmt.filter(District.slug.ilike(f"%{slug}%"))
+        if lon is not None and lat is not None:
+            search_radius = 0.01
+            stmt = stmt.filter(
+                (District.lon.between(lon - search_radius, lon + search_radius)) & 
+                (District.lat.between(lat - search_radius, lat + search_radius))
+            )
+        if region_id is not None:
+            stmt = stmt.filter(District.region_id == region_id)
 
-        return success_response(data=district_data)
+        # Pagination and sorting
+        pagination_params = PaginationParams(skip=skip, limit=limit, sort_field=sort_field, sort_order=sort_order)
+        paginated_query = paginate_and_sort(stmt, pagination_params)
+
+        result = db.execute(paginated_query)
+        districts = result.all()  
+
+        return success_response(data=[{
+            **jsonable_encoder(DistrictRead.from_orm(district[0])),
+            "region_name": district[1]  
+        } for district in districts])
+
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# FIND BY ID
-@router.get("/user/districts/{id}", response_model=DistrictRead)
-def get_district_by_id(id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(District).filter(District.id == id, District.active == True, District.deleted == False)
-        result = db.execute(stmt)
-        district = result.scalars().first()
-        if not district:
-            return error_response(status_code=404, error_message="District not found")
-        
-        return success_response(data=jsonable_encoder(DistrictRead.from_orm(district)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
 
-# FIND BY REGION ID
-@router.get("/user/districts/region/{region_id}", response_model=List[DistrictRead])
-def get_districts_by_region(region_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(District).filter(District.region_id == region_id, District.active == True, District.deleted == False)
-        result = db.execute(stmt)
-        districts = result.scalars().all()
-
-        if not districts:
-            return error_response(status_code=404, error_message="No districts found for this region")
-
-        district_data = [jsonable_encoder(DistrictRead.from_orm(district)) for district in districts]
-        return success_response(data=district_data)
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-# FIND BY NAME
-@router.get("/user/districts/name/{name}", response_model=DistrictRead)
-def get_district_by_name(name: str, db: Session = Depends(get_db)):
-    try:
-        stmt = select(District).filter(District.name == name, District.active == True, District.deleted == False)
-        result = db.execute(stmt)
-        district = result.scalars().first()
-        if not district:
-            return error_response(status_code=404, error_message="District not found")
-        
-        return success_response(data=jsonable_encoder(DistrictRead.from_orm(district)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-    
-# EXPORT DISTRICTS
-@router.post("/user/districts/export-csv", response_class=StreamingResponse)
+# EXPORT
+@router.post("/districts/export-csv", response_class=StreamingResponse)
 def export_districts_csv(db: Session = Depends(get_db)):
     try:
         stmt = select(District).filter(District.active == True, District.deleted == False)

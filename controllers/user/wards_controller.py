@@ -1,6 +1,9 @@
-from typing import List
-from fastapi import APIRouter, Depends
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from domain.models.constituency_model import Constituency
+from domain.models.district_model import District
+from domain.models.region_model import Region
 from utils.consts import USER
 from utils.database import get_db
 from domain.models.ward_model import Ward
@@ -10,107 +13,80 @@ from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
 from io import StringIO
 from fastapi.responses import StreamingResponse
+from utils.pagination_sorting import PaginationParams, paginate_and_sort
 from sqlalchemy.future import select
 import csv
 
 router = APIRouter(tags=["User Wards"], dependencies=[Depends(has_role(USER))])
 
 # FETCH ALL
-@router.get("/user/wards", response_model=List[WardRead])
-def get_wards(db: Session = Depends(get_db)):
+@router.get("/wards", response_model=List[WardRead])
+def get_wards(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),  
+    limit: int = Query(10, ge=1, le=100),  
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("asc"),
+    id: Optional[int] = Query(None),
+    name: Optional[str] = Query(None),
+    slug: Optional[str] = Query(None),
+    lon: Optional[float] = Query(None),
+    lat: Optional[float] = Query(None),
+    region_id: Optional[int] = Query(None),
+    district_id: Optional[int] = Query(None),
+    constituency_id: Optional[int] = Query(None)
+):
     try:
-        stmt = select(Ward).filter(Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        wards = result.scalars().all()
+        stmt = select(
+            Ward,
+            Region.name.label("region_name"),
+            District.name.label("district_name"),
+            Constituency.name.label("constituency_name")
+        ).join(Region, Ward.region_id == Region.id
+        ).join(District, Ward.district_id == District.id
+        ).join(Constituency, Ward.constituency_id == Constituency.id
+        ).filter(Ward.active == True, Ward.deleted == False)
 
-        # Serialize object
-        ward_data = [jsonable_encoder(WardRead.from_orm(ward)) for ward in wards]
-        return success_response(data=ward_data)
-    except Exception as e:
-        print("Error fetching wards:", e)
-        return error_response(status_code=500, error_message=str(e))
+        # Filters
+        if id is not None:
+            stmt = stmt.filter(Ward.id == id)
+        if name:
+            stmt = stmt.filter(Ward.name.ilike(f"%{name}%"))
+        if slug:
+            stmt = stmt.filter(Ward.slug.ilike(f"%{slug}%"))
+        if lon is not None and lat is not None:
+            search_radius = 0.01
+            stmt = stmt.filter(
+                (Ward.lon.between(lon - search_radius, lon + search_radius)) & 
+                (Ward.lat.between(lat - search_radius, lat + search_radius))
+            )
+        if region_id is not None:
+            stmt = stmt.filter(Ward.region_id == region_id)
+        if district_id is not None:
+            stmt = stmt.filter(Ward.district_id == district_id)
+        if constituency_id is not None:
+            stmt = stmt.filter(Ward.district_id == district_id)
 
-# FIND BY ID
-@router.get("/user/wards/{id}", response_model=WardRead)
-def get_ward_by_id(id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.id == id, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        ward = result.scalar_one_or_none()
+        # Pagination and sorting
+        pagination_params = PaginationParams(skip=skip, limit=limit, sort_field=sort_field, sort_order=sort_order)
+        paginated_query = paginate_and_sort(stmt, pagination_params)
 
-        if not ward:
-            return error_response(status_code=404, error_message="ward not found")
-        
-        return success_response(data=jsonable_encoder(WardRead.from_orm(ward)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
+        result = db.execute(paginated_query)
+        wards = result.all()  
 
+        return success_response(data=[{
+            **jsonable_encoder(WardRead.from_orm(ward[0])),
+            "region_name": ward[1],
+            "district_name": ward[2], 
+            "constituency_name": ward[3], 
+        } for ward in wards])
 
-# FIND BY REGION ID
-@router.get("/user/wards/region/{region_id}", response_model=List[WardRead])
-def get_ward_by_region_id(region_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.region_id == region_id, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        wards = result.scalars().all()
-
-        if not wards:
-            return error_response(status_code=404, error_message="ward not found")
-        
-        return success_response(data=jsonable_encoder([WardRead.from_orm(ward) for ward in wards]))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-# FIND BY DISTRICT ID
-@router.get("/user/wards/district/{district_id}", response_model=List[WardRead])
-def get_ward_by_district_id(district_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.district_id == district_id, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        wards = result.scalars().all()
-
-        if not wards:
-            return error_response(status_code=404, error_message="ward not found")
-        
-        return success_response(data=jsonable_encoder([WardRead.from_orm(ward) for ward in wards]))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-# FIND BY CONSTITUENCY ID
-@router.get("/user/wards/constituency/{constituency_id}", response_model=List[WardRead])
-def get_wards_by_constituency_id(constituency_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.constituency_id == constituency_id, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        wards = result.scalars().all()
-
-        if not wards:
-            return error_response(status_code=404, error_message="constituency not found")
-        
-        return success_response(data=jsonable_encoder([WardRead.from_orm(constituency) for constituency in wards]))
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
 
-# FIND BY NAME
-@router.get("/user/wards/name/{name}", response_model=WardRead)
-def get_ward_by_name(name: str, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.name == name, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        ward = result.scalar_one_or_none()
-
-        if not ward:
-            return error_response(status_code=404, error_message="ward not found")
-        
-        return success_response(data=jsonable_encoder(WardRead.from_orm(ward)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-@router.post("/user/wards/export-csv", response_class=StreamingResponse)
+# EXPORT
+@router.post("/wards/export-csv", response_class=StreamingResponse)
 def export_wards_csv(db: Session = Depends(get_db)):
     try:
         stmt = select(Ward).filter(Ward.active == True, Ward.deleted == False)

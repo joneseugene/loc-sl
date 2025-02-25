@@ -1,7 +1,10 @@
 from datetime import datetime
-from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
+from domain.models.constituency_model import Constituency
+from domain.models.district_model import District
+from domain.models.region_model import Region
 from utils.consts import SUPER
 from utils.database import get_db
 from domain.models.ward_model import Ward
@@ -15,99 +18,84 @@ from sqlalchemy.future import select
 import pandas as pd
 import csv
 
+from utils.pagination_sorting import PaginationParams, paginate_and_sort
+
 router = APIRouter(tags=["Super Wards"], dependencies=[Depends(has_role(SUPER))])
 
 # FETCH ALL
 @router.get("/super/wards", response_model=List[WardRead])
-def get_wards(db: Session = Depends(get_db)):
+def get_wards(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),  
+    limit: int = Query(10, ge=1, le=100),  
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("asc"),
+    id: Optional[int] = Query(None),
+    name: Optional[str] = Query(None),
+    slug: Optional[str] = Query(None),
+    lon: Optional[float] = Query(None),
+    lat: Optional[float] = Query(None),
+    region_id: Optional[int] = Query(None),
+    district_id: Optional[int] = Query(None),
+    constituency_id: Optional[int] = Query(None),
+    created_at: Optional[str] = Query(None),
+    created_by: Optional[str] = Query(None),
+    updated_at: Optional[str] = Query(None),
+    updated_by: Optional[str] = Query(None)
+):
     try:
-        stmt = select(Ward).filter(Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        wards = result.scalars().all()
+        stmt = select(
+            Ward,
+            Region.name.label("region_name"),
+            District.name.label("district_name"),
+            Constituency.name.label("constituency_name")
+        ).join(Region, Ward.region_id == Region.id
+        ).join(District, Ward.district_id == District.id
+        ).join(Constituency, Ward.constituency_id == Constituency.id
+        ).filter(Ward.active == True, Ward.deleted == False)
 
-        # Serialize object
-        ward_data = [jsonable_encoder(WardRead.from_orm(ward)) for ward in wards]
-        return success_response(data=ward_data)
-    except Exception as e:
-        print("Error fetching wards:", e)
-        return error_response(status_code=500, error_message=str(e))
+        # Filters
+        if id is not None:
+            stmt = stmt.filter(Ward.id == id)
+        if name:
+            stmt = stmt.filter(Ward.name.ilike(f"%{name}%"))
+        if slug:
+            stmt = stmt.filter(Ward.slug.ilike(f"%{slug}%"))
+        if lon is not None and lat is not None:
+            search_radius = 0.01
+            stmt = stmt.filter(
+                (Ward.lon.between(lon - search_radius, lon + search_radius)) & 
+                (Ward.lat.between(lat - search_radius, lat + search_radius))
+            )
+        if region_id is not None:
+            stmt = stmt.filter(Ward.region_id == region_id)
+        if district_id is not None:
+            stmt = stmt.filter(Ward.district_id == district_id)
+        if constituency_id is not None:
+            stmt = stmt.filter(Ward.district_id == district_id)
+        if created_at:
+            stmt = stmt.filter(Ward.createdAt >= created_at)
+        if created_by:
+            stmt = stmt.filter(Ward.createdBy.ilike(f"%{created_by}%"))
+        if updated_at:
+            stmt = stmt.filter(Ward.updatedAt >= updated_at)
+        if updated_by:
+            stmt = stmt.filter(Ward.updatedBy.ilike(f"%{updated_by}%"))
 
-# FIND BY ID
-@router.get("/super/wards/{id}", response_model=WardRead)
-def get_ward_by_id(id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.id == id, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        ward = result.scalar_one_or_none()
+        # Pagination and sorting
+        pagination_params = PaginationParams(skip=skip, limit=limit, sort_field=sort_field, sort_order=sort_order)
+        paginated_query = paginate_and_sort(stmt, pagination_params)
 
-        if not ward:
-            return error_response(status_code=404, error_message="ward not found")
-        
-        return success_response(data=jsonable_encoder(WardRead.from_orm(ward)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
+        result = db.execute(paginated_query)
+        wards = result.all()  
 
+        return success_response(data=[{
+            **jsonable_encoder(WardRead.from_orm(ward[0])),
+            "region_name": ward[1],
+            "district_name": ward[2], 
+            "constituency_name": ward[3], 
+        } for ward in wards])
 
-# FIND BY REGION ID
-@router.get("/super/wards/region/{region_id}", response_model=List[WardRead])
-def get_ward_by_region_id(region_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.region_id == region_id, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        wards = result.scalars().all()
-
-        if not wards:
-            return error_response(status_code=404, error_message="ward not found")
-        
-        return success_response(data=jsonable_encoder([WardRead.from_orm(ward) for ward in wards]))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-# FIND BY DISTRICT ID
-@router.get("/super/wards/district/{district_id}", response_model=List[WardRead])
-def get_ward_by_district_id(district_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.district_id == district_id, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        wards = result.scalars().all()
-
-        if not wards:
-            return error_response(status_code=404, error_message="ward not found")
-        
-        return success_response(data=jsonable_encoder([WardRead.from_orm(ward) for ward in wards]))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-# FIND BY CONSTITUENCY ID
-@router.get("/super/wards/constituency/{constituency_id}", response_model=List[WardRead])
-def get_wards_by_constituency_id(constituency_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.constituency_id == constituency_id, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        wards = result.scalars().all()
-
-        if not wards:
-            return error_response(status_code=404, error_message="constituency not found")
-        
-        return success_response(data=jsonable_encoder([WardRead.from_orm(constituency) for constituency in wards]))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-# FIND BY NAME
-@router.get("/super/wards/name/{name}", response_model=WardRead)
-def get_ward_by_name(name: str, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.name == name, Ward.active == True, Ward.deleted == False)
-        result = db.execute(stmt)
-        ward = result.scalar_one_or_none()
-
-        if not ward:
-            return error_response(status_code=404, error_message="ward not found")
-        
-        return success_response(data=jsonable_encoder(WardRead.from_orm(ward)))
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
@@ -132,8 +120,7 @@ def create_ward(ward: WardCreate, db: Session = Depends(get_db)):
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-
-# UPDATE WARD
+# UPDATE
 @router.put("/super/wards/{id}", response_model=WardRead)
 def update_ward(id: int, ward_data: WardUpdate, db: Session = Depends(get_db)):
     try:
@@ -158,8 +145,7 @@ def update_ward(id: int, ward_data: WardUpdate, db: Session = Depends(get_db)):
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-
-# SOFT DELETE WARD
+# SOFT DELETE
 @router.delete("/super/wards/{id}")
 def soft_delete_ward(id: int, delete_data: WardSoftDelete, db: Session = Depends(get_db)):
     try:
@@ -181,8 +167,7 @@ def soft_delete_ward(id: int, delete_data: WardSoftDelete, db: Session = Depends
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
     
-
-# UPLOAD CONSTITUENCIES
+# UPLOAD
 @router.post("/super/wards/upload")
 def upload_wards_csv(
     file: UploadFile = File(...), db: Session = Depends(get_db)
@@ -232,8 +217,7 @@ def upload_wards_csv(
     except Exception as e:
         return error_response(status_code=500, error_message=f"Error processing CSV: {str(e)}")
 
-
-
+# EXPORT
 @router.post("/super/wards/export-csv", response_class=StreamingResponse)
 def export_wards_csv(db: Session = Depends(get_db)):
     try:

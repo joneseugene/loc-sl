@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File
+from typing import List, Optional
+from fastapi import APIRouter, Depends, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from utils.consts import SUPER
 from utils.database import get_db
@@ -12,53 +12,71 @@ from fastapi.encoders import jsonable_encoder
 from io import StringIO
 from fastapi.responses import StreamingResponse
 from sqlalchemy.future import select
+from utils.pagination_sorting import PaginationParams, paginate_and_sort
 import pandas as pd
 import csv
 
 
-router = APIRouter(tags=["Super Regions"], dependencies=[Depends(has_role(SUPER))] )
+# router = APIRouter(tags=["Super Regions"], dependencies=[Depends(has_role(SUPER))] )
+router = APIRouter(tags=["Super Regions"])
 
 # FETCH ALL
 @router.get("/super/regions", response_model=List[RegionRead])
-def get_regions(db: Session = Depends(get_db)):
+def get_regions(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),  
+    limit: int = Query(10, ge=1, le=100),  
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("asc"),
+    id: Optional[int] = Query(None),
+    name: Optional[str] = Query(None),
+    slug: Optional[str] = Query(None),
+    lon: Optional[float] = Query(None),
+    lat: Optional[float] = Query(None),
+    created_at: Optional[str] = Query(None),
+    created_by: Optional[str] = Query(None),
+    updated_at: Optional[str] = Query(None),
+    updated_by: Optional[str] = Query(None)
+):
     try:
         stmt = select(Region).filter(Region.active == True, Region.deleted == False)
-        result = db.execute(stmt)
+
+        # Filters
+        if id is not None:
+            stmt = stmt.filter(Region.id == id)
+        if name:
+            stmt = stmt.filter(Region.name.ilike(f"%{name}%"))
+        if slug:
+            stmt = stmt.filter(Region.slug.ilike(f"%{slug}%"))
+        if lon is not None and lat is not None:
+            search_radius = 0.01
+            stmt = stmt.filter(
+                (Region.lon.between(lon - search_radius, lon + search_radius)) &
+                (Region.lat.between(lat - search_radius, lat + search_radius))
+            )
+        if created_at:
+            stmt = stmt.filter(Region.createdAt >= created_at)
+        if created_by:
+            stmt = stmt.filter(Region.createdBy.ilike(f"%{created_by}%"))
+        if updated_at:
+            stmt = stmt.filter(Region.updatedAt >= updated_at)
+        if updated_by:
+            stmt = stmt.filter(Region.updatedBy.ilike(f"%{updated_by}%"))
+
+        # Pagination and sorting
+        pagination_params = PaginationParams(skip=skip, limit=limit, sort_field=sort_field, sort_order=sort_order)
+        paginated_query = paginate_and_sort(stmt, pagination_params)
+
+        result = db.execute(paginated_query)
         regions = result.scalars().all()
-        
-        # Serialize object
-        region_data = [jsonable_encoder(RegionRead.from_orm(region)) for region in regions]
-        return success_response(data=region_data)
+
+        # Serialized Response
+        return success_response(data=[jsonable_encoder(RegionRead.from_orm(region)) for region in regions])
+
     except Exception as e:
         print("Error fetching regions:", e)
         return error_response(status_code=500, error_message=str(e))
-
-# FIND BY ID
-@router.get("/super/regions/{id}", response_model=RegionRead)
-def get_region_by_id(id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Region).filter(Region.id == id, Region.active == True, Region.deleted == False)
-        result = db.execute(stmt)
-        region = result.scalars().first()
-        if not region:
-            return error_response(status_code=404, error_message="Region not found")
-        return success_response(data=jsonable_encoder(RegionRead.from_orm(region)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-# FIND BY NAME
-@router.get("/super/regions/name/{name}", response_model=RegionRead)
-def get_region_by_name(name: str, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Region).filter(Region.name == name, Region.active == True, Region.deleted == False)
-        result = db.execute(stmt)
-        region = result.scalars().first()
-        if not region:
-            return error_response(status_code=404, error_message="Region not found")
-        return success_response(data=jsonable_encoder(RegionRead.from_orm(region)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
+    
 # CREATE
 @router.post("/super/regions", response_model=RegionCreate)
 def create_region(region: RegionCreate, db: Session = Depends(get_db)):
@@ -81,20 +99,35 @@ def create_region(region: RegionCreate, db: Session = Depends(get_db)):
 
 # UPLOAD REGION
 @router.post("/super/regions/upload")
-def upload_regions_csv(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
-):
+def upload_regions_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
-        df = pd.read_csv(file.file)
+        # Ensure file is a CSV
+        if not file.filename.endswith(".csv"):
+            return error_response(status_code=400, error_message="Only CSV files are allowed.")
+        
+        if file.filename != "regions.csv":
+            return error_response(status_code=400, error_message="File must be named 'regions.csv'.")
 
-        if "name" not in df.columns:
-            return error_response(status_code=400, error_message="CSV must contain a 'name' column.")
+        df = pd.read_csv(file.file, encoding="utf-8", delimiter=",", header=0)
+        print("CSV Columns:", df.columns.tolist())
+        # Remove extra space from column names
+        df.columns = df.columns.str.strip()
+        # Ensure required columns exist
+        required_columns = {"no", "name", "lon", "lat"}
+        if not required_columns.issubset(df.columns):
+            return error_response(
+                status_code=400,
+                error_message=f"Invalid CSV content format. Expected: {list(required_columns)}, but got: {df.columns.tolist()}."
+            )
 
         processed_regions = []
 
         for _, row in df.iterrows():
             name = row["name"].strip()
+            lon = row["lon"]
+            lat = row["lat"]
 
+            # Check if region already exists
             stmt = select(Region).filter(Region.name == name)
             result = db.execute(stmt)
             existing_region = result.scalars().first()
@@ -102,11 +135,15 @@ def upload_regions_csv(
             if existing_region:
                 if existing_region.active is False and existing_region.deleted is True:
                     continue
+                existing_region.lon = lon
+                existing_region.lat = lat
                 existing_region.updated_at = datetime.utcnow()
                 existing_region.updated_by = "System"
             else:
                 new_region = Region(
                     name=name,
+                    lon=lon,
+                    lat=lat,
                     created_at=datetime.utcnow(),
                     created_by="System",
                     updated_at=datetime.utcnow(),
@@ -115,12 +152,12 @@ def upload_regions_csv(
                     deleted=False,
                 )
                 db.add(new_region)
-            
-            processed_regions.append(name)
+
+            processed_regions.append({"name": name, "longitude": lon, "latitude": lat})
 
         db.commit()
         return success_response(
-            message=f"CSV processed successfully. Regions updated/added: {len(processed_regions)}",
+            message=f"CSV processed successfully. Region(s) updated/added: {len(processed_regions)}",
             data=processed_regions,
         )
 
@@ -130,7 +167,7 @@ def upload_regions_csv(
         return error_response(status_code=500, error_message=f"Error processing CSV: {str(e)}")
 
 
-
+# EXPORT REGION
 @router.post("/super/regions/export-csv", response_class=StreamingResponse)
 def export_regions_csv(db: Session = Depends(get_db)):
     try:
@@ -178,8 +215,6 @@ def export_regions_csv(db: Session = Depends(get_db)):
         # Handle errors and return an appropriate response
         return error_response(status_code=500, error_message=f"Error generating CSV: {str(e)}")
 
-
-
 # UPDATE REGION
 @router.put("/super/regions/{id}", response_model=RegionRead)
 def update_region(id: int, region_data: RegionUpdate, db: Session = Depends(get_db)):
@@ -225,4 +260,3 @@ def soft_delete_region(id: int, delete_data: RegionSoftDelete, db: Session = Dep
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
     
-

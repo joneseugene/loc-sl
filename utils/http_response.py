@@ -6,9 +6,9 @@ from typing import Any, List, Union
 def success_response(data: Union[BaseModel, List[BaseModel], dict, List[dict], None] = None, status_code: int = 200, message: str = "success"):
     if isinstance(data, list):
         # Ensure all items are dictionaries
-        data = [item.dict() if isinstance(item, BaseModel) else item for item in data]
+        data = [item.model_dump() if isinstance(item, BaseModel) else item for item in data]
     elif isinstance(data, BaseModel):
-        data = data.dict()
+        data = data.model_dump()
     elif isinstance(data, dict):
         pass
     else:

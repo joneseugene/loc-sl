@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from domain.models.region_model import Region
 from utils.consts import SUPER
 from utils.database import get_db
 from domain.models.district_model import District  
@@ -13,73 +14,74 @@ from fastapi.encoders import jsonable_encoder
 from io import StringIO
 from fastapi.responses import StreamingResponse
 from sqlalchemy.future import select
+from utils.pagination_sorting import PaginationParams, paginate_and_sort
 import pandas as pd
 import csv
 
-router = APIRouter(tags=["Super Districts"], dependencies=[Depends(has_role(SUPER))] )
+
+# router = APIRouter(tags=["Super Districts"], dependencies=[Depends(has_role(SUPER))] )
+router = APIRouter(tags=["Super Districts"])
 
 # FETCH ALL
 @router.get("/super/districts", response_model=List[DistrictRead])
-def get_districts(db: Session = Depends(get_db)):
+def get_districts(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),  
+    limit: int = Query(10, ge=1, le=100),  
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("asc"),
+    id: Optional[int] = Query(None),
+    name: Optional[str] = Query(None),
+    slug: Optional[str] = Query(None),
+    lon: Optional[float] = Query(None),
+    lat: Optional[float] = Query(None),
+    region_id: Optional[int] = Query(None),
+    created_at: Optional[str] = Query(None),
+    created_by: Optional[str] = Query(None),
+    updated_at: Optional[str] = Query(None),
+    updated_by: Optional[str] = Query(None)
+):
     try:
-        stmt = select(District).filter(District.active == True, District.deleted == False)
-        result = db.execute(stmt)
-        districts = result.scalars().all()
+        stmt = select(District, Region.name.label("region_name")).join(Region, District.region_id == Region.id).filter(District.active == True, District.deleted == False)
 
-        # Serialize each district object
-        district_data = [jsonable_encoder(DistrictRead.from_orm(district)) for district in districts]
+        # Filters
+        if id is not None:
+            stmt = stmt.filter(District.id == id)
+        if name:
+            stmt = stmt.filter(District.name.ilike(f"%{name}%"))
+        if slug:
+            stmt = stmt.filter(District.slug.ilike(f"%{slug}%"))
+        if lon is not None and lat is not None:
+            search_radius = 0.01
+            stmt = stmt.filter(
+                (District.lon.between(lon - search_radius, lon + search_radius)) & 
+                (District.lat.between(lat - search_radius, lat + search_radius))
+            )
+        if region_id is not None:
+            stmt = stmt.filter(District.region_id == region_id)
+        if created_at:
+            stmt = stmt.filter(District.createdAt >= created_at)
+        if created_by:
+            stmt = stmt.filter(District.createdBy.ilike(f"%{created_by}%"))
+        if updated_at:
+            stmt = stmt.filter(District.updatedAt >= updated_at)
+        if updated_by:
+            stmt = stmt.filter(District.updatedBy.ilike(f"%{updated_by}%"))
 
-        return success_response(data=district_data)
+        # Pagination and sorting
+        pagination_params = PaginationParams(skip=skip, limit=limit, sort_field=sort_field, sort_order=sort_order)
+        paginated_query = paginate_and_sort(stmt, pagination_params)
+
+        result = db.execute(paginated_query)
+        districts = result.all()  
+
+        return success_response(data=[{
+            **jsonable_encoder(DistrictRead.from_orm(district[0])),
+            "region_name": district[1]  
+        } for district in districts])
+
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
-
-
-# FIND BY ID
-@router.get("/super/districts/{id}", response_model=DistrictRead)
-def get_district_by_id(id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(District).filter(District.id == id, District.active == True, District.deleted == False)
-        result = db.execute(stmt)
-        district = result.scalars().first()
-        if not district:
-            return error_response(status_code=404, error_message="District not found")
-        
-        return success_response(data=jsonable_encoder(DistrictRead.from_orm(district)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-# FIND BY REGION ID
-@router.get("/super/districts/region/{region_id}", response_model=List[DistrictRead])
-def get_districts_by_region(region_id: int, db: Session = Depends(get_db)):
-    try:
-        stmt = select(District).filter(District.region_id == region_id, District.active == True, District.deleted == False)
-        result = db.execute(stmt)
-        districts = result.scalars().all()
-
-        if not districts:
-            return error_response(status_code=404, error_message="No districts found for this region")
-
-        district_data = [jsonable_encoder(DistrictRead.from_orm(district)) for district in districts]
-        return success_response(data=district_data)
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
-
-# FIND BY NAME
-@router.get("/super/districts/name/{name}", response_model=DistrictRead)
-def get_district_by_name(name: str, db: Session = Depends(get_db)):
-    try:
-        stmt = select(District).filter(District.name == name, District.active == True, District.deleted == False)
-        result = db.execute(stmt)
-        district = result.scalars().first()
-        if not district:
-            return error_response(status_code=404, error_message="District not found")
-        
-        return success_response(data=jsonable_encoder(DistrictRead.from_orm(district)))
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-
 
 # CREATE
 @router.post("/super/districts", response_model=DistrictCreate)
@@ -102,6 +104,73 @@ def create_district(district: DistrictCreate, db: Session = Depends(get_db)):
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
+# UPLOAD DISTRICT
+@router.post("/super/districts/upload")
+def upload_districts_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        # Ensure file is a CSV
+        if not file.filename.endswith(".csv"):
+            return error_response(status_code=400, error_message="Only CSV files are allowed.")
+
+        df = pd.read_csv(file.file, encoding="utf-8", delimiter=",", header=0)
+        print("CSV Columns:", df.columns.tolist())
+        # Remove extra space from column names
+        df.columns = df.columns.str.strip()
+        # Ensure required columns exist
+        required_columns = {"no", "name", "lon", "lat", "region_id"}
+        if not required_columns.issubset(df.columns):
+            return error_response(
+                status_code=400,
+                error_message=f"Invalid CSV content format. Expected: {list(required_columns)}, but got: {df.columns.tolist()}."
+            )
+
+        processed_districts = []
+
+        for _, row in df.iterrows():
+            name = row["name"].strip()
+            lon = row["lon"]
+            lat = row["lat"]
+            region_id = row["region_id"]
+
+            # Check if district already exists
+            stmt = select(District).filter(District.name == name)
+            result = db.execute(stmt)
+            existing_district = result.scalars().first()
+
+            if existing_district:
+                if existing_district.active is False and existing_district.deleted is True:
+                    continue
+                existing_district.lon = lon
+                existing_district.lat = lat
+                existing_district.updated_at = datetime.utcnow()
+                existing_district.updated_by = "System"
+            else:
+                new_district = District(
+                    name=name,
+                    lon=lon,
+                    lat=lat,
+                    region_id=region_id,
+                    created_at=datetime.utcnow(),
+                    created_by="System",
+                    updated_at=datetime.utcnow(),
+                    updated_by="System",
+                    active=True,
+                    deleted=False,
+                )
+                db.add(new_district)
+
+            processed_districts.append({"name": name, "longitude": lon, "latitude": lat, "region_id": region_id})
+
+        db.commit()
+        return success_response(
+            message=f"CSV processed successfully. District(s) updated/added: {len(processed_districts)}",
+            data=processed_districts,
+        )
+
+    except pd.errors.EmptyDataError:
+        return error_response(status_code=400, error_message="CSV file is empty.")
+    except Exception as e:
+        return error_response(status_code=500, error_message=f"Error processing CSV: {str(e)}")
 
 # UPDATE DISTRICT
 @router.put("/super/districts/{id}", response_model=DistrictRead)
@@ -127,58 +196,6 @@ def update_district(id: int, district_data: DistrictUpdate, db: Session = Depend
         return success_response(data=jsonable_encoder(DistrictRead.from_orm(district)))
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
-
-
-# UPLOAD DISTRICTS
-@router.post("/super/districts/upload")
-def upload_districts_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    try:
-        df = pd.read_csv(file.file)
-
-        if "name" not in df.columns or "region_id" not in df.columns:
-            return error_response(status_code=400, error_message="CSV must contain 'name' and 'region_id' columns.")
-
-        processed_districts = []
-
-        for _, row in df.iterrows():
-            name = row["name"].strip()
-            region_id = row["region_id"]
-
-            stmt = select(District).filter(District.name == name)
-            result = db.execute(stmt)
-            existing_district = result.scalars().first()
-
-            if existing_district:
-                if existing_district.active is False and existing_district.deleted is True:
-                    continue
-                existing_district.updated_at = datetime.utcnow()
-                existing_district.updated_by = "System"
-            else:
-                new_district = District(
-                    name=name,
-                    region_id=region_id,
-                    created_at=datetime.utcnow(),
-                    created_by="System",
-                    updated_at=datetime.utcnow(),
-                    updated_by="System",
-                    active=True,
-                    deleted=False,
-                )
-                db.add(new_district)
-
-            processed_districts.append(name)
-
-        db.commit()
-        return success_response(
-            message=f"CSV processed successfully. Districts updated/added: {len(processed_districts)}",
-            data=processed_districts,
-        )
-
-    except pd.errors.EmptyDataError:
-        return error_response(status_code=400, error_message="CSV file is empty.")
-    except Exception as e:
-        return error_response(status_code=500, error_message=f"Error processing CSV: {str(e)}")
-
 
 # EXPORT DISTRICTS
 @router.post("/super/districts/export-csv", response_class=StreamingResponse)
@@ -226,7 +243,6 @@ def export_districts_csv(db: Session = Depends(get_db)):
 
     except Exception as e:
         return error_response(status_code=500, error_message=f"Error generating CSV: {str(e)}")
-
 
 # SOFT DELETE DISTRICT
 @router.delete("/super/districts/{id}")
