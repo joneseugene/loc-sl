@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
-from pydantic.json import custom_pydantic_encoder
 
 class WardBase(BaseModel):
     name: str
@@ -25,7 +24,6 @@ class WardRead(WardBase):
     updated_by: Optional[str] = None
 
     class Config:
-        orm_mode = True
         from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat()  
@@ -40,12 +38,10 @@ class WardUpdate(BaseModel):
     constituency_id: Optional[int] = None
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 class WardSoftDelete(BaseModel):
     deleted_reason: Optional[str] = None 
 
     class Config:
-        orm_mode = True
         from_attributes = True

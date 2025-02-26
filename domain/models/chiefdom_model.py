@@ -3,8 +3,8 @@ from utils.functions import generate_slug
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .spine_model import Spine
 
-class Ward(Spine):
-    __tablename__ = "wards"
+class Chiefdom(Spine):
+    __tablename__ = "chiefdoms"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str | None] = mapped_column(String, unique=True, index=True)
@@ -13,18 +13,15 @@ class Ward(Spine):
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     region_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("regions.id"))
     district_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("districts.id"))
-    constituency_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("constituencies.id"))
 
     # Relationships
-    region: Mapped["Region"] = relationship(back_populates="wards")
-    district: Mapped["District"] = relationship(back_populates="wards")
-    constituency: Mapped["Constituency"] = relationship(back_populates="wards")
+    region: Mapped["Region"] = relationship(back_populates="chiefdoms")
+    district: Mapped["District"] = relationship(back_populates="chiefdoms")
 
-    # Import models
-from .region_model import Region
+# Import models
 from .district_model import District
-from .constituency_model import Constituency
+from .region_model import Region
 
 # Event listeners
-event.listen(Region, "before_insert", generate_slug)
-event.listen(Region, "before_update", generate_slug)
+event.listen(Chiefdom, "before_insert", generate_slug)
+event.listen(Chiefdom, "before_update", generate_slug)

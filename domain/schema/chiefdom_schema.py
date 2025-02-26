@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
-class ConstituencyBase(BaseModel):
+class ChiefdomBase(BaseModel):
     name: str
     slug: Optional[str] = None
     lon: float
@@ -10,10 +10,10 @@ class ConstituencyBase(BaseModel):
     region_id: int
     district_id: int
 
-class ConstituencyCreate(ConstituencyBase):
+class ChiefdomCreate(ChiefdomBase):
     pass
 
-class ConstituencyRead(ConstituencyBase):
+class ChiefdomRead(ChiefdomBase):
     id: int
     active: bool
     deleted: bool
@@ -28,7 +28,7 @@ class ConstituencyRead(ConstituencyBase):
             datetime: lambda v: v.isoformat()  
         }
 
-class ConstituencyUpdate(BaseModel):
+class ChiefdomUpdate(BaseModel):
     name: Optional[str] = None
     lon: Optional[float] = None
     lat: Optional[float] = None
@@ -38,7 +38,7 @@ class ConstituencyUpdate(BaseModel):
     class Config:
         from_attributes = True
 
-class ConstituencySoftDelete(BaseModel):
+class ChiefdomSoftDelete(BaseModel):
     deleted_reason: Optional[str] = None 
 
     class Config:

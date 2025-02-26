@@ -97,7 +97,7 @@ def create_region(region: RegionCreate, db: Session = Depends(get_db)):
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# UPLOAD REGION
+# UPLOAD
 @router.post("/super/regions/upload")
 def upload_regions_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
@@ -166,8 +166,7 @@ def upload_regions_csv(file: UploadFile = File(...), db: Session = Depends(get_d
     except Exception as e:
         return error_response(status_code=500, error_message=f"Error processing CSV: {str(e)}")
 
-
-# EXPORT REGION
+# EXPORT
 @router.post("/super/regions/export-csv", response_class=StreamingResponse)
 def export_regions_csv(db: Session = Depends(get_db)):
     try:
@@ -215,7 +214,7 @@ def export_regions_csv(db: Session = Depends(get_db)):
         # Handle errors and return an appropriate response
         return error_response(status_code=500, error_message=f"Error generating CSV: {str(e)}")
 
-# UPDATE REGION
+# UPDATE
 @router.put("/super/regions/{id}", response_model=RegionRead)
 def update_region(id: int, region_data: RegionUpdate, db: Session = Depends(get_db)):
     try:
@@ -239,7 +238,7 @@ def update_region(id: int, region_data: RegionUpdate, db: Session = Depends(get_
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# SOFT DELETE REGION
+# SOFT DELETE
 @router.delete("/super/regions/{id}")
 def soft_delete_region(id: int, delete_data: RegionSoftDelete, db: Session = Depends(get_db)):
     try:

@@ -11,7 +11,6 @@ from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.future import select
 
-
 router = APIRouter(tags=["Super Users"], dependencies=[Depends(has_role(SUPER))] )
 
 # FETCH ALL

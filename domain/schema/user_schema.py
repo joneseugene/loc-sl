@@ -25,7 +25,6 @@ class UserRead(UserBase):
     updated_by: Optional[str] = None
 
     class Config:
-        orm_mode = True
         from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat()
@@ -40,7 +39,6 @@ class UserUpdate(BaseModel):
     role_id: Optional[int] = None
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 
@@ -48,7 +46,6 @@ class UserSoftDelete(BaseModel):
     deleted_reason: Optional[str] = None
 
     class Config:
-        orm_mode = True
         from_attributes = True
 
 

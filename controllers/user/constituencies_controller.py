@@ -16,7 +16,7 @@ from utils.pagination_sorting import PaginationParams, paginate_and_sort
 from sqlalchemy.future import select
 import csv
 
-router =  APIRouter(tags=["User Constituencies"], dependencies=[Depends(has_role(USER))] )
+router =  APIRouter(tags=["Constituencies"], dependencies=[Depends(has_role(USER))] )
 
 # FETCH ALL
 @router.get("/constituencies", response_model=List[ConstituencyRead])

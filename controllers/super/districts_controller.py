@@ -104,7 +104,7 @@ def create_district(district: DistrictCreate, db: Session = Depends(get_db)):
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# UPLOAD DISTRICT
+# UPLOAD
 @router.post("/super/districts/upload")
 def upload_districts_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
@@ -172,7 +172,7 @@ def upload_districts_csv(file: UploadFile = File(...), db: Session = Depends(get
     except Exception as e:
         return error_response(status_code=500, error_message=f"Error processing CSV: {str(e)}")
 
-# UPDATE DISTRICT
+# UPDATE
 @router.put("/super/districts/{id}", response_model=DistrictRead)
 def update_district(id: int, district_data: DistrictUpdate, db: Session = Depends(get_db)):
     try:
@@ -197,7 +197,7 @@ def update_district(id: int, district_data: DistrictUpdate, db: Session = Depend
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# EXPORT DISTRICTS
+# EXPORT
 @router.post("/super/districts/export-csv", response_class=StreamingResponse)
 def export_districts_csv(db: Session = Depends(get_db)):
     try:
@@ -244,7 +244,7 @@ def export_districts_csv(db: Session = Depends(get_db)):
     except Exception as e:
         return error_response(status_code=500, error_message=f"Error generating CSV: {str(e)}")
 
-# SOFT DELETE DISTRICT
+# SOFT DELETE
 @router.delete("/super/districts/{id}")
 def soft_delete_district(id: int, delete_data: DistrictSoftDelete, db: Session = Depends(get_db)):
     try:

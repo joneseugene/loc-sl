@@ -1,4 +1,5 @@
-from sqlalchemy import Integer, String, Float, ForeignKey
+from sqlalchemy import Integer, String, Float, ForeignKey, event
+from utils.functions import generate_slug
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .spine_model import Spine
 
@@ -18,7 +19,11 @@ class Constituency(Spine):
     district: Mapped["District"] = relationship(back_populates="constituencies")
     wards: Mapped[list["Ward"]] = relationship(back_populates="constituency", cascade="all, delete-orphan")
 
-    # Import models after class definition
+    # Import models
 from .region_model import Region
 from .district_model import District
 from .ward_model import Ward
+
+# Event listeners
+event.listen(Constituency, "before_insert", generate_slug)
+event.listen(Constituency, "before_update", generate_slug)

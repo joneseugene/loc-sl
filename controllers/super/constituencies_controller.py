@@ -113,7 +113,7 @@ def create_constituency(constituency: ConstituencyCreate, db: Session = Depends(
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# UPDATE constituency
+# UPDATE
 @router.put("/super/constituencies/{id}", response_model=ConstituencyRead)
 def update_constituency(id: int, constituency_data: ConstituencyUpdate, db: Session = Depends(get_db)):
     try:
@@ -138,7 +138,7 @@ def update_constituency(id: int, constituency_data: ConstituencyUpdate, db: Sess
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# SOFT DELETE CONSTITUENCY
+# SOFT DELETE
 @router.delete("/super/constituencies/{id}")
 def soft_delete_constituency(id: int, delete_data: ConstituencySoftDelete, db: Session = Depends(get_db)):
     try:
@@ -160,7 +160,7 @@ def soft_delete_constituency(id: int, delete_data: ConstituencySoftDelete, db: S
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
     
-# UPLOAD CONSTITUENCIES
+# UPLOAD
 @router.post("/super/constituencies/upload")
 def upload_constituencies_csv(
     file: UploadFile = File(...), db: Session = Depends(get_db)
@@ -210,7 +210,7 @@ def upload_constituencies_csv(
     except Exception as e:
         return error_response(status_code=500, error_message=f"Error processing CSV: {str(e)}")
 
-# EXPORT CONSTITUENCIES
+# EXPORT
 @router.post("/super/constituencies/export-csv", response_class=StreamingResponse)
 def export_constituencies_csv(db: Session = Depends(get_db)):
     try:
