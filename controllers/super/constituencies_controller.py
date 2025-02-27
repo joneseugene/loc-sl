@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
+from domain.models.user_model import User
+from utils.security import get_user_from_token
 from domain.models.district_model import District
 from domain.models.region_model import Region
 from utils.consts import SUPER
@@ -95,7 +97,11 @@ def get_constituencies(
 
 # CREATE
 @router.post("/super/constituencies", response_model=ConstituencyCreate)
-def create_constituency(constituency: ConstituencyCreate, db: Session = Depends(get_db)):
+def create_constituency(
+    constituency: ConstituencyCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(Constituency).filter(Constituency.name == constituency.name)
         result =  db.execute(stmt)
@@ -104,7 +110,15 @@ def create_constituency(constituency: ConstituencyCreate, db: Session = Depends(
         if existing_constituency:
             return error_response(status_code=400, error_message="constituency already exists")
         
-        new_data = Constituency(name=constituency.name, lon=constituency.lon, lat=constituency.lat, region_id=constituency.region_id, district_id=constituency.district_id)
+        new_data = Constituency(
+            name=constituency.name, 
+            lon=constituency.lon, 
+            lat=constituency.lat, 
+            region_id=constituency.region_id, 
+            district_id=constituency.district_id,
+            created_by=current_user.email,
+            updated_by=current_user.email
+        )
         db.add(new_data)
         db.commit()
         db.refresh(new_data)
@@ -115,7 +129,12 @@ def create_constituency(constituency: ConstituencyCreate, db: Session = Depends(
 
 # UPDATE
 @router.put("/super/constituencies/{id}", response_model=ConstituencyRead)
-def update_constituency(id: int, constituency_data: ConstituencyUpdate, db: Session = Depends(get_db)):
+def update_constituency(
+    id: int, 
+    constituency_data: ConstituencyUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(Constituency).filter(Constituency.id == id)
         result =  db.execute(stmt)
@@ -129,7 +148,7 @@ def update_constituency(id: int, constituency_data: ConstituencyUpdate, db: Sess
             setattr(constituency, key, value)
 
         constituency.updated_at = datetime.utcnow()
-        constituency.updated_by = "System"
+        constituency.updated_by = current_user.email
 
         db.commit()
         db.refresh(constituency)
@@ -138,33 +157,13 @@ def update_constituency(id: int, constituency_data: ConstituencyUpdate, db: Sess
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# SOFT DELETE
-@router.delete("/super/constituencies/{id}")
-def soft_delete_constituency(id: int, delete_data: ConstituencySoftDelete, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Constituency).filter(Constituency.id == id, Constituency.deleted == False)
-        result =  db.execute(stmt)
-        constituency = result.scalar_one_or_none()
-
-        if not constituency:
-            return error_response(status_code=404, error_message="constituency not found or already deleted")
-
-        constituency.deleted = True
-        constituency.deleted_at = datetime.utcnow()
-        constituency.deleted_by = "System"
-        constituency.deleted_reason = delete_data.deleted_reason
-
-        db.commit()
-
-        return success_response(message="constituency successfully deleted")
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-    
 # UPLOAD
 @router.post("/super/constituencies/upload")
 def upload_constituencies_csv(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
-):
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         df = pd.read_csv(file.file)
 
@@ -184,14 +183,14 @@ def upload_constituencies_csv(
                 if existing_constituency.active is False and existing_constituency.deleted is True:
                     continue
                 existing_constituency.updated_at = datetime.utcnow()
-                existing_constituency.updated_by = "System"
+                existing_constituency.updated_by = current_user.email
             else:
                 new_constituency = Constituency(
                     name=name,
                     created_at=datetime.utcnow(),
-                    created_by="System",
+                    created_by=current_user.email,
                     updated_at=datetime.utcnow(),
-                    updated_by="System",
+                    updated_by=current_user.email,
                     active=True,
                     deleted=False,
                 )
@@ -254,4 +253,30 @@ def export_constituencies_csv(db: Session = Depends(get_db)):
     except Exception as e:
         return error_response(status_code=500, error_message=f"Error generating CSV: {str(e)}")
 
+# SOFT DELETE
+@router.delete("/super/constituencies/{id}")
+def soft_delete_constituency(
+    id: int, 
+    delete_data: ConstituencySoftDelete, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
+    try:
+        stmt = select(Constituency).filter(Constituency.id == id, Constituency.deleted == False)
+        result =  db.execute(stmt)
+        constituency = result.scalar_one_or_none()
 
+        if not constituency:
+            return error_response(status_code=404, error_message="constituency not found or already deleted")
+
+        constituency.deleted = True
+        constituency.deleted_at = datetime.utcnow()
+        constituency.deleted_by = current_user.email
+        constituency.deleted_reason = delete_data.deleted_reason
+
+        db.commit()
+
+        return success_response(message="constituency successfully deleted")
+    except Exception as e:
+        return error_response(status_code=500, error_message=str(e))
+    

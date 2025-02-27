@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, Query
 from sqlalchemy.orm import Session
+from domain.models.user_model import User
+from utils.security import get_user_from_token
 from utils.consts import SUPER
 from utils.database import get_db
 from domain.models.region_model import Region  
@@ -79,7 +81,10 @@ def get_regions(
     
 # CREATE
 @router.post("/super/regions", response_model=RegionCreate)
-def create_region(region: RegionCreate, db: Session = Depends(get_db)):
+def create_region(
+    region: RegionCreate, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_user_from_token)):
     try:
         stmt = select(Region).filter(Region.name == region.name)
         result = db.execute(stmt)
@@ -88,7 +93,13 @@ def create_region(region: RegionCreate, db: Session = Depends(get_db)):
         if existing_region:
             return error_response(status_code=400, error_message="Region already exists")
 
-        new_region = Region(name=region.name, lon=region.lon, lat=region.lat)
+        new_region = Region(
+            name=region.name, 
+            lon=region.lon, 
+            lat=region.lat, 
+            created_by=current_user.email,
+            updated_by=current_user.email
+        )
         db.add(new_region)
         db.commit()
         db.refresh(new_region)
@@ -99,9 +110,12 @@ def create_region(region: RegionCreate, db: Session = Depends(get_db)):
 
 # UPLOAD
 @router.post("/super/regions/upload")
-def upload_regions_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+def upload_regions_csv(
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
-        # Ensure file is a CSV
         if not file.filename.endswith(".csv"):
             return error_response(status_code=400, error_message="Only CSV files are allowed.")
         
@@ -110,9 +124,7 @@ def upload_regions_csv(file: UploadFile = File(...), db: Session = Depends(get_d
 
         df = pd.read_csv(file.file, encoding="utf-8", delimiter=",", header=0)
         print("CSV Columns:", df.columns.tolist())
-        # Remove extra space from column names
         df.columns = df.columns.str.strip()
-        # Ensure required columns exist
         required_columns = {"no", "name", "lon", "lat"}
         if not required_columns.issubset(df.columns):
             return error_response(
@@ -138,29 +150,27 @@ def upload_regions_csv(file: UploadFile = File(...), db: Session = Depends(get_d
                 existing_region.lon = lon
                 existing_region.lat = lat
                 existing_region.updated_at = datetime.utcnow()
-                existing_region.updated_by = "System"
+                existing_region.updated_by = current_user.email
             else:
                 new_region = Region(
                     name=name,
                     lon=lon,
                     lat=lat,
                     created_at=datetime.utcnow(),
-                    created_by="System",
+                    created_by=current_user.email,
                     updated_at=datetime.utcnow(),
-                    updated_by="System",
+                    updated_by=current_user.email,
                     active=True,
                     deleted=False,
                 )
                 db.add(new_region)
 
             processed_regions.append({"name": name, "longitude": lon, "latitude": lat})
-
         db.commit()
         return success_response(
             message=f"CSV processed successfully. Region(s) updated/added: {len(processed_regions)}",
             data=processed_regions,
         )
-
     except pd.errors.EmptyDataError:
         return error_response(status_code=400, error_message="CSV file is empty.")
     except Exception as e:
@@ -177,30 +187,24 @@ def export_regions_csv(db: Session = Depends(get_db)):
         if not regions:
             return error_response(status_code=404, error_message="No regions found to export.")
 
-        # Define CSV headers
+        # CSV headers
         csv_headers = ["No", "Name", "Slug", "Longitude", "Latitude"]
 
-        # Create a StringIO object to hold the CSV data
         csv_data = StringIO()
         csv_writer = csv.writer(csv_data)
-
-        # Write the headers to the CSV
         csv_writer.writerow(csv_headers)
 
-        # Add the row number (No) and data for each region
-        for idx, region in enumerate(regions, start=1):  # start=1 to begin the "No" column at 1
+        for idx, region in enumerate(regions, start=1): 
             csv_writer.writerow([
-                idx,  # Row number (No)
+                idx, 
                 region.name,
                 region.slug,
                 region.lon,
                 region.lat,
             ])
 
-        # Rewind the StringIO object to the beginning for streaming
         csv_data.seek(0)
 
-        # Return the CSV data as a streaming response
         return StreamingResponse(
             iter([csv_data.getvalue()]),
             media_type="text/csv",
@@ -211,12 +215,16 @@ def export_regions_csv(db: Session = Depends(get_db)):
         )
 
     except Exception as e:
-        # Handle errors and return an appropriate response
         return error_response(status_code=500, error_message=f"Error generating CSV: {str(e)}")
 
 # UPDATE
 @router.put("/super/regions/{id}", response_model=RegionRead)
-def update_region(id: int, region_data: RegionUpdate, db: Session = Depends(get_db)):
+def update_region(
+    id: int, 
+    region_data: RegionUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(Region).filter(Region.id == id)
         result = db.execute(stmt)
@@ -229,7 +237,7 @@ def update_region(id: int, region_data: RegionUpdate, db: Session = Depends(get_
         for key, value in update_data.items():
             setattr(region, key, value)
             region.updated_at = datetime.utcnow()
-            region.updated_by = "System"
+            region.updated_by = current_user.email
 
         db.commit()
         db.refresh(region)
@@ -240,7 +248,12 @@ def update_region(id: int, region_data: RegionUpdate, db: Session = Depends(get_
 
 # SOFT DELETE
 @router.delete("/super/regions/{id}")
-def soft_delete_region(id: int, delete_data: RegionSoftDelete, db: Session = Depends(get_db)):
+def soft_delete_region(
+    id: int, 
+    delete_data: RegionSoftDelete, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(Region).filter(Region.id == id, Region.deleted == False)
         result = db.execute(stmt)
@@ -251,7 +264,7 @@ def soft_delete_region(id: int, delete_data: RegionSoftDelete, db: Session = Dep
 
         region.deleted = True
         region.deleted_at = datetime.utcnow()
-        region.deleted_by = "System"
+        region.deleted_by = current_user.email
         region.deleted_reason = delete_data.deleted_reason
 
         db.commit()

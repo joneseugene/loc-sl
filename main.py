@@ -6,7 +6,7 @@ from controllers.super.roles_controller import router as roles_router
 from controllers.super.regions_controller import router as super_region_router  
 from controllers.super.districts_controller import router as super_district_router  
 from controllers.super.constituencies_controller import router as super_constituency_router  
-from controllers.super.chiefdoms_controller import router as super_chiefdom_router 
+from controllers.super.chiefdoms_controller import router as super_chiefdom_router
 from controllers.super.wards_controller import router as super_ward_router  
 # User Routes
 from controllers.user.regions_controller import router as user_region_router  

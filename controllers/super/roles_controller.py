@@ -3,6 +3,8 @@ from typing import List
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from domain.models.user_model import User
+from utils.security import get_user_from_token
 from sqlalchemy.future import select 
 from utils.consts import SUPER
 from utils.database import get_db
@@ -65,12 +67,14 @@ def get_roles(
         print("Error fetching roles:", e)
         return error_response(status_code=500, error_message=str(e))
 
-
 # CREATE
-@router.post("/super/roles", response_model=RoleRead)  # Changed RoleCreate → RoleRead
-def create_role(role: RoleCreate, db: Session = Depends(get_db)):
+@router.post("/super/roles", response_model=RoleRead) 
+def create_role(
+    role: RoleCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
-        # Check if the role already exists
         query = select(Role).filter(Role.name == role.name)
         result = db.execute(query)
         existing_role = result.scalars().first()
@@ -91,7 +95,12 @@ def create_role(role: RoleCreate, db: Session = Depends(get_db)):
 
 # UPDATE
 @router.put("/super/roles/{id}", response_model=RoleRead)
-def update_role(id: int, role_data: RoleUpdate, db: Session = Depends(get_db)):
+def update_role(
+    id: int, 
+    role_data: RoleUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         query = select(Role).filter(Role.id == id)
         result = db.execute(query)
@@ -118,7 +127,12 @@ def update_role(id: int, role_data: RoleUpdate, db: Session = Depends(get_db)):
 
 # SOFT DELETE
 @router.delete("/super/roles/{id}")
-def soft_delete_role(id: int, delete_data: RoleSoftDelete, db: Session = Depends(get_db)):
+def soft_delete_role(
+    id: int, 
+    delete_data: RoleSoftDelete, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         query = select(Role).filter(Role.id == id, Role.deleted == False)
         result = db.execute(query)

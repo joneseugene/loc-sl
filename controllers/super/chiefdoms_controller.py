@@ -2,14 +2,14 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
+from domain.models.user_model import User
+from utils.security import get_user_from_token
 from domain.models.chiefdom_model import Chiefdom
 from domain.models.district_model import District
 from domain.models.region_model import Region
 from domain.schema.chiefdom_schema import ChiefdomCreate, ChiefdomRead, ChiefdomSoftDelete, ChiefdomUpdate
 from utils.consts import SUPER
 from utils.database import get_db
-from domain.models.constituency_model import Constituency 
-from domain.schema.constituency_schema import ConstituencyCreate, ConstituencyRead, ConstituencySoftDelete, ConstituencyUpdate
 from utils.functions import has_role
 from utils.http_response import success_response, error_response
 from fastapi.encoders import jsonable_encoder
@@ -97,7 +97,11 @@ def get_chiefdoms(
 
 # CREATE
 @router.post("/super/chiefdoms", response_model=ChiefdomCreate)
-def create_chiefdom(chiefdom: ChiefdomCreate, db: Session = Depends(get_db)):
+def create_chiefdom(
+    chiefdom: ChiefdomCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(Chiefdom).filter(Chiefdom.name == chiefdom.name)
         result =  db.execute(stmt)
@@ -106,7 +110,15 @@ def create_chiefdom(chiefdom: ChiefdomCreate, db: Session = Depends(get_db)):
         if existing_chiefdom:
             return error_response(status_code=400, error_message="chiefdom already exists")
         
-        new_data = Chiefdom(name=chiefdom.name, lon=chiefdom.lon, lat=chiefdom.lat, region_id=chiefdom.region_id, district_id=chiefdom.district_id)
+        new_data = Chiefdom(
+            name=chiefdom.name, 
+            lon=chiefdom.lon, 
+            lat=chiefdom.lat, 
+            region_id=chiefdom.region_id, 
+            district_id=chiefdom.district_id,
+            created_by=current_user.email,
+            updated_by=current_user.email
+            )
         db.add(new_data)
         db.commit()
         db.refresh(new_data)
@@ -117,7 +129,12 @@ def create_chiefdom(chiefdom: ChiefdomCreate, db: Session = Depends(get_db)):
 
 # UPDATE
 @router.put("/super/chiefdoms/{id}", response_model=ChiefdomRead)
-def update_chiefdom(id: int, chiefdom_data: ChiefdomUpdate, db: Session = Depends(get_db)):
+def update_chiefdom(
+    id: int, 
+    chiefdom_data: ChiefdomUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(Chiefdom).filter(Chiefdom.id == id)
         result =  db.execute(stmt)
@@ -131,7 +148,7 @@ def update_chiefdom(id: int, chiefdom_data: ChiefdomUpdate, db: Session = Depend
             setattr(chiefdom, key, value)
 
         chiefdom.updated_at = datetime.utcnow()
-        chiefdom.updated_by = "System"
+        chiefdom.updated_by = current_user.email
 
         db.commit()
         db.refresh(chiefdom)
@@ -140,33 +157,13 @@ def update_chiefdom(id: int, chiefdom_data: ChiefdomUpdate, db: Session = Depend
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
 
-# SOFT DELETE
-@router.delete("/super/chiefdoms/{id}")
-def soft_delete_chiefdom(id: int, delete_data: ChiefdomSoftDelete, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Chiefdom).filter(Chiefdom.id == id, Chiefdom.deleted == False)
-        result =  db.execute(stmt)
-        chiefdom = result.scalar_one_or_none()
-
-        if not chiefdom:
-            return error_response(status_code=404, error_message="chiefdom not found or already deleted")
-
-        chiefdom.deleted = True
-        chiefdom.deleted_at = datetime.utcnow()
-        chiefdom.deleted_by = "System"
-        chiefdom.deleted_reason = delete_data.deleted_reason
-
-        db.commit()
-
-        return success_response(message="chiefdom successfully deleted")
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-    
 # UPLOAD
 @router.post("/super/chiefdoms/upload")
 def upload_chiefdoms_csv(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
-):
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         df = pd.read_csv(file.file)
 
@@ -186,14 +183,14 @@ def upload_chiefdoms_csv(
                 if existing_chiefdom.active is False and existing_chiefdom.deleted is True:
                     continue
                 existing_chiefdom.updated_at = datetime.utcnow()
-                existing_chiefdom.updated_by = "System"
+                existing_chiefdom.updated_by = current_user.email
             else:
                 new_chiefdom = Chiefdom(
                     name=name,
                     created_at=datetime.utcnow(),
-                    created_by="System",
+                    created_by=current_user.email,
                     updated_at=datetime.utcnow(),
-                    updated_by="System",
+                    updated_by=current_user.email,
                     active=True,
                     deleted=False,
                 )
@@ -256,4 +253,30 @@ def export_chiefdoms_csv(db: Session = Depends(get_db)):
     except Exception as e:
         return error_response(status_code=500, error_message=f"Error generating CSV: {str(e)}")
 
+# SOFT DELETE
+@router.delete("/super/chiefdoms/{id}")
+def soft_delete_chiefdom(
+    id: int, 
+    delete_data: ChiefdomSoftDelete, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
+    try:
+        stmt = select(Chiefdom).filter(Chiefdom.id == id, Chiefdom.deleted == False)
+        result =  db.execute(stmt)
+        chiefdom = result.scalar_one_or_none()
+
+        if not chiefdom:
+            return error_response(status_code=404, error_message="chiefdom not found or already deleted")
+
+        chiefdom.deleted = True
+        chiefdom.deleted_at = datetime.utcnow()
+        chiefdom.deleted_by = current_user.email
+        chiefdom.deleted_reason = delete_data.deleted_reason
+
+        db.commit()
+
+        return success_response(message="chiefdom successfully deleted")
+    except Exception as e:
+        return error_response(status_code=500, error_message=str(e))
 

@@ -2,7 +2,8 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from domain.models.user_model import User
+from utils.security import get_user_from_token
 from domain.models.region_model import Region
 from utils.consts import SUPER
 from utils.database import get_db
@@ -85,7 +86,11 @@ def get_districts(
 
 # CREATE
 @router.post("/super/districts", response_model=DistrictCreate)
-def create_district(district: DistrictCreate, db: Session = Depends(get_db)):
+def create_district(
+    district: DistrictCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(District).filter(District.name == district.name)
         result = db.execute(stmt)
@@ -95,7 +100,12 @@ def create_district(district: DistrictCreate, db: Session = Depends(get_db)):
             return error_response(status_code=400, error_message="District already exists")
 
         new_district = District(
-            name=district.name, lon=district.lon, lat=district.lat, region_id=district.region_id
+            name=district.name, 
+            lon=district.lon, 
+            lat=district.lat, 
+            region_id=district.region_id,
+            created_by=current_user.email,
+            updated_by=current_user.email
         )
         db.add(new_district)
         db.commit()
@@ -106,17 +116,18 @@ def create_district(district: DistrictCreate, db: Session = Depends(get_db)):
 
 # UPLOAD
 @router.post("/super/districts/upload")
-def upload_districts_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+def upload_districts_csv(
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
-        # Ensure file is a CSV
         if not file.filename.endswith(".csv"):
             return error_response(status_code=400, error_message="Only CSV files are allowed.")
 
         df = pd.read_csv(file.file, encoding="utf-8", delimiter=",", header=0)
         print("CSV Columns:", df.columns.tolist())
-        # Remove extra space from column names
         df.columns = df.columns.str.strip()
-        # Ensure required columns exist
         required_columns = {"no", "name", "lon", "lat", "region_id"}
         if not required_columns.issubset(df.columns):
             return error_response(
@@ -143,7 +154,7 @@ def upload_districts_csv(file: UploadFile = File(...), db: Session = Depends(get
                 existing_district.lon = lon
                 existing_district.lat = lat
                 existing_district.updated_at = datetime.utcnow()
-                existing_district.updated_by = "System"
+                existing_district.updated_by = current_user.email
             else:
                 new_district = District(
                     name=name,
@@ -151,9 +162,9 @@ def upload_districts_csv(file: UploadFile = File(...), db: Session = Depends(get
                     lat=lat,
                     region_id=region_id,
                     created_at=datetime.utcnow(),
-                    created_by="System",
+                    created_by=current_user.email,
                     updated_at=datetime.utcnow(),
-                    updated_by="System",
+                    updated_by=current_user.email,
                     active=True,
                     deleted=False,
                 )
@@ -174,7 +185,12 @@ def upload_districts_csv(file: UploadFile = File(...), db: Session = Depends(get
 
 # UPDATE
 @router.put("/super/districts/{id}", response_model=DistrictRead)
-def update_district(id: int, district_data: DistrictUpdate, db: Session = Depends(get_db)):
+def update_district(
+    id: int, 
+    district_data: DistrictUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(District).filter(District.id == id)
         result = db.execute(stmt)
@@ -188,7 +204,7 @@ def update_district(id: int, district_data: DistrictUpdate, db: Session = Depend
             setattr(district, key, value)
 
         district.updated_at = datetime.utcnow()
-        district.updated_by = "System"
+        district.updated_by = current_user.email
 
         db.commit()
         db.refresh(district)
@@ -246,7 +262,12 @@ def export_districts_csv(db: Session = Depends(get_db)):
 
 # SOFT DELETE
 @router.delete("/super/districts/{id}")
-def soft_delete_district(id: int, delete_data: DistrictSoftDelete, db: Session = Depends(get_db)):
+def soft_delete_district(
+    id: int, 
+    delete_data: DistrictSoftDelete, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(District).filter(District.id == id, District.deleted == False)
         result = db.execute(stmt)
@@ -257,7 +278,7 @@ def soft_delete_district(id: int, delete_data: DistrictSoftDelete, db: Session =
 
         district.deleted = True
         district.deleted_at = datetime.utcnow()
-        district.deleted_by = "System"
+        district.deleted_by = current_user.email
         district.deleted_reason = delete_data.deleted_reason
 
         db.commit()

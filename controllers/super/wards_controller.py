@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
+from domain.models.user_model import User
+from utils.security import get_user_from_token
 from domain.models.constituency_model import Constituency
 from domain.models.district_model import District
 from domain.models.region_model import Region
@@ -102,7 +104,11 @@ def get_wards(
 
 # CREATE
 @router.post("/super/wards", response_model=WardCreate)
-def create_ward(ward: WardCreate, db: Session = Depends(get_db)):
+def create_ward(
+    ward: WardCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(Ward).filter(Ward.name == ward.name)
         result = db.execute(stmt)
@@ -122,7 +128,12 @@ def create_ward(ward: WardCreate, db: Session = Depends(get_db)):
 
 # UPDATE
 @router.put("/super/wards/{id}", response_model=WardRead)
-def update_ward(id: int, ward_data: WardUpdate, db: Session = Depends(get_db)):
+def update_ward(
+    id: int, 
+    ward_data: WardUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         stmt = select(Ward).filter(Ward.id == id)
         result = db.execute(stmt)
@@ -144,34 +155,14 @@ def update_ward(id: int, ward_data: WardUpdate, db: Session = Depends(get_db)):
         return success_response(data=jsonable_encoder(WardRead.from_orm(ward)))
     except Exception as e:
         return error_response(status_code=500, error_message=str(e))
-
-# SOFT DELETE
-@router.delete("/super/wards/{id}")
-def soft_delete_ward(id: int, delete_data: WardSoftDelete, db: Session = Depends(get_db)):
-    try:
-        stmt = select(Ward).filter(Ward.id == id, Ward.deleted == False)
-        result = db.execute(stmt)
-        ward = result.scalar_one_or_none()
-
-        if not ward:
-            return error_response(status_code=404, error_message="ward not found or already deleted")
-
-        ward.deleted = True
-        ward.deleted_at = datetime.utcnow()
-        ward.deleted_by = "System"
-        ward.deleted_reason = delete_data.deleted_reason
-
-        db.commit()
-
-        return success_response(message="ward successfully deleted")
-    except Exception as e:
-        return error_response(status_code=500, error_message=str(e))
-    
+  
 # UPLOAD
 @router.post("/super/wards/upload")
 def upload_wards_csv(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
-):
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
     try:
         df = pd.read_csv(file.file)
 
@@ -267,3 +258,31 @@ def export_wards_csv(db: Session = Depends(get_db)):
     except Exception as e:
         # Handle errors and return an appropriate response
         return error_response(status_code=500, error_message=f"Error generating CSV: {str(e)}")
+
+# SOFT DELETE
+@router.delete("/super/wards/{id}")
+def soft_delete_ward(
+    id: int, 
+    delete_data: WardSoftDelete, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_user_from_token)
+    ):
+    try:
+        stmt = select(Ward).filter(Ward.id == id, Ward.deleted == False)
+        result = db.execute(stmt)
+        ward = result.scalar_one_or_none()
+
+        if not ward:
+            return error_response(status_code=404, error_message="ward not found or already deleted")
+
+        ward.deleted = True
+        ward.deleted_at = datetime.utcnow()
+        ward.deleted_by = "System"
+        ward.deleted_reason = delete_data.deleted_reason
+
+        db.commit()
+
+        return success_response(message="ward successfully deleted")
+    except Exception as e:
+        return error_response(status_code=500, error_message=str(e))
+  
