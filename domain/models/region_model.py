@@ -7,7 +7,7 @@ class Region(Spine):
     __tablename__ = "regions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String, unique=True, index=True)
     slug: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     lon: Mapped[float | None] = mapped_column(Float, nullable=True)
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
